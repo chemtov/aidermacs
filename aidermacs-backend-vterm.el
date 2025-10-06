@@ -110,16 +110,16 @@ If the finish sequence is detected, store the output via
             ;; If we found a shell prompt indicating output finished
             (when (string-match-p expected prompt-line)
               (aidermacs--store-output (string-trim output))
-              (setq-local aidermacs--ready t)
-              (let ((edited-files (aidermacs--detect-edited-files)))
-                ;; Check if any files were edited and show ediff if needed
-                (if edited-files
-                    (aidermacs--show-ediff-for-edited-files edited-files)
-                  (aidermacs--cleanup-temp-buffers))
-                ;; Restore the original process filter now that we've finished processing
-                ;; this command's output. This returns vterm to its normal behavior.
-                (set-process-filter proc orig-filter)
-                (aidermacs--maybe-cancel-active-timer (process-buffer proc))))))))))
+                (setq-local aidermacs--ready t)
+                (let ((edited-files (aidermacs--detect-edited-files)))
+                  ;; Check if any files were edited and show ediff if needed
+                  (if edited-files
+                      (aidermacs--show-ediff-for-edited-files edited-files)
+                    (aidermacs--cleanup-temp-buffers))
+                  ;; Restore the original process filter now that we've finished processing
+                  ;; this command's output. This returns vterm to its normal behavior.
+                  (set-process-filter proc orig-filter)
+                  (aidermacs--maybe-cancel-active-timer)))))))))
 
 (defun aidermacs--vterm-capture-output ()
   "Capture vterm output until the finish sequence appears.
@@ -359,6 +359,79 @@ _ARGS are the arguments."
     (aidermacs--maybe-cancel-active-timer)
     (aidermacs--cleanup-temp-buffers)))
 
+(defun aidermacs-vterm-next-prompt (n)
+  "Move to end of Nth next aidermacs prompt in vterm buffer.
+Finds prompts that come after separator lines (────)."
+  (interactive "p")
+  (let ((count (abs (or n 1)))
+        (found 0)
+        (start-pos (point)))
+    (save-excursion
+      (while (and (< found count) (not (eobp)))
+        ;; Search for the separator line
+        (when (re-search-forward "^─+$" nil t)
+          ;; Found separator, now look for the first prompt after it
+          (let ((separator-pos (point)))
+            (forward-line 1)
+            ;; Search for prompt within reasonable distance (e.g., next 10 lines)
+            (let ((search-limit (save-excursion (forward-line 10) (point))))
+              (when (re-search-forward "^\\(architect\\|code\\|ask\\|help\\)>" search-limit t)
+                (setq found (1+ found))
+                (when (= found count)
+                  ;; Position cursor just after the "> " instead of end of line
+                  (goto-char (match-end 0))
+                  (when (looking-at " ")
+                    (forward-char 1))
+                  (setq start-pos (point)))))
+            ;; If no prompt found after this separator, continue from after separator
+            (when (< found count)
+              (goto-char separator-pos))))))
+    (if (> found 0)
+        (goto-char start-pos)
+      (message "No more prompts found"))))
+
+
+(defun aidermacs-vterm-previous-prompt (n)
+  "Move to end of Nth previous aidermacs prompt in vterm buffer.
+Finds prompts that come after separator lines (────)."
+  (interactive "p")
+  (let ((count (abs (or n 1)))
+        (found 0)
+        (start-pos (point)))
+    (save-excursion
+      ;; If we're currently at or after a prompt, move before the current separator
+      (beginning-of-line)
+      (when (looking-at "^\\(architect\\|code\\|ask\\|help\\)>")
+        ;; Move backwards to find the separator for current prompt
+        (while (and (not (bobp)) (not (looking-at "^─+$")))
+          (forward-line -1))
+        ;; Move before this separator to start searching for previous ones
+        (when (looking-at "^─+$")
+          (forward-line -1)))
+      
+      (while (and (< found count) (not (bobp)))
+        ;; Search backwards for separator line
+        (when (re-search-backward "^─+$" nil t)
+          ;; Found separator, now look for the first prompt after it
+          (let ((separator-pos (point)))
+            (forward-line 1)
+            ;; Search for prompt within reasonable distance (e.g., next 10 lines)
+            (let ((search-limit (save-excursion (forward-line 10) (point))))
+              (when (re-search-forward "^\\(architect\\|code\\|ask\\|help\\)>" search-limit t)
+                (setq found (1+ found))
+                (when (= found count)
+                  ;; Position cursor just after the "> " instead of end of line
+                  (goto-char (match-end 0))
+                  (when (looking-at " ")
+                    (forward-char 1))
+                  (setq start-pos (point)))))
+            ;; Continue searching from before this separator
+            (goto-char separator-pos)
+            (forward-line -1)))))
+    (if (> found 0)
+        (goto-char start-pos)
+      (message "No more prompts found"))))
+
 (defvar aidermacs-vterm-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd aidermacs-vterm-multiline-newline-key) #'aidermacs-vterm-insert-newline)
@@ -380,7 +453,10 @@ _ARGS are the arguments."
     ;; Add the copy function to vterm copy mode map for both C-w and M-w
     (when (boundp 'vterm-copy-mode-map)
       (define-key vterm-copy-mode-map (kbd "C-w") #'aidermacs-vterm-copy-with-processing)
-      (define-key vterm-copy-mode-map (kbd "M-w") #'aidermacs-vterm-copy-with-processing))))
+      (define-key vterm-copy-mode-map (kbd "M-w") #'aidermacs-vterm-copy-with-processing)
+      ;; Override vterm's prompt navigation
+      (define-key vterm-copy-mode-map (kbd "C-c C-n") #'aidermacs-vterm-next-prompt)
+      (define-key vterm-copy-mode-map (kbd "C-c C-p") #'aidermacs-vterm-previous-prompt))))
 
 (provide 'aidermacs-backend-vterm)
 ;;; aidermacs-backend-vterm.el ends here
