@@ -156,50 +156,53 @@ Use BUFFER if provided, otherwise retrieve it from `aidermacs-get-buffer-name'."
         (setq aidermacs--vterm-active-timer nil)))))
 
 
-(defun aidermacs--vterm-filter-buffer-substring (orig-fun &rest args)
-  "Filter text for better copy/paste by using actual vterm terminal width."
-  (let ((text (apply orig-fun args)))
-    ;; Only process when in vterm copy mode AND there's an active region
-    (if (and (boundp 'vterm-copy-mode) vterm-copy-mode
-             (use-region-p))
-        ;; Do the expensive processing
-        (let ((term-width (or 
-                           ;; Try to get from vterm's internal width calculation
-                           (and (boundp 'vterm--term) vterm--term
-                                (let ((margin-width (if (fboundp 'vterm--get-margin-width)
-                                                        (vterm--get-margin-width) 0))
-                                      (min-width (if (boundp 'vterm-min-window-width) 
-                                                    vterm-min-window-width 80)))
-                                  (max (- (window-max-chars-per-line) margin-width) min-width)))
-                           ;; Fallback to window width
-                           (window-width)
-                           ;; Final fallback
-                           80)))
-          (with-temp-buffer
-            (insert text)
-            (goto-char (point-min))
-            ;; Process each line
-            (while (not (eobp))
-              (let* ((line-start (point))
-                     (line-end (line-end-position))
-                     (line-length (- line-end line-start)))
-                ;; If line is longer than terminal width, break it up
-                (when (> line-length term-width)
-                  (goto-char line-start)
-                  (while (< (point) line-end)
-                    (let ((cut-pos (min (+ (point) term-width) line-end)))
-                      (goto-char cut-pos)
-                      ;; Insert newline at exact terminal width
-                      (when (< (point) line-end)
-                        (insert "\n")
-                        (setq line-end (1+ line-end)))))) ; Adjust line-end for inserted newline
-                (forward-line 1)))
-            ;; Clean up trailing whitespace
-            (delete-trailing-whitespace)
-            ;; Return the cleaned text
-            (buffer-string)))
-      ;; Otherwise return text unmodified
-      text)))
+(defun aidermacs-vterm-copy-with-processing ()
+  "Copy selected text with terminal width processing."
+  (interactive)
+  (when (and (boundp 'vterm-copy-mode) vterm-copy-mode (use-region-p))
+    (let ((text (buffer-substring-no-properties (region-beginning) (region-end))))
+      ;; Apply our processing
+      (let ((processed-text (aidermacs--process-vterm-text text)))
+        (kill-new processed-text)
+        (message "Copied processed text to kill ring")))))
+
+(defun aidermacs--process-vterm-text (text)
+  "Process TEXT for better copy/paste by using actual vterm terminal width."
+  (let ((term-width (or
+                     ;; Try to get from vterm's internal width calculation
+                     (and (boundp 'vterm--term) vterm--term
+                          (let ((margin-width (if (fboundp 'vterm--get-margin-width)
+                                                  (vterm--get-margin-width) 0))
+                                (min-width (if (boundp 'vterm-min-window-width)
+                                              vterm-min-window-width 80)))
+                            (max (- (window-max-chars-per-line) margin-width) min-width)))
+                     ;; Fallback to window width
+                     (window-width)
+                     ;; Final fallback
+                     80)))
+    (with-temp-buffer
+      (insert text)
+      (goto-char (point-min))
+      ;; Process each line
+      (while (not (eobp))
+        (let* ((line-start (point))
+               (line-end (line-end-position))
+               (line-length (- line-end line-start)))
+          ;; If line is longer than terminal width, break it up
+          (when (> line-length term-width)
+            (goto-char line-start)
+            (while (< (point) line-end)
+              (let ((cut-pos (min (+ (point) term-width) line-end)))
+                (goto-char cut-pos)
+                ;; Insert newline at exact terminal width
+                (when (< (point) line-end)
+                  (insert "\n")
+                  (setq line-end (1+ line-end)))))) ; Adjust line-end for inserted newline
+          (forward-line 1)))
+      ;; Clean up trailing whitespace
+      (delete-trailing-whitespace)
+      ;; Return the cleaned text
+      (buffer-string))))
 
 (defcustom aidermacs-vterm-use-theme-colors t
   "Whether to use Emacs theme colors for aider.
@@ -372,8 +375,12 @@ _ARGS are the arguments."
   "Minor mode for vterm backend buffer used by aidermacs."
   :init-value nil
   :keymap aidermacs-vterm-mode-map
-  (add-function :around (local 'filter-buffer-substring-function)
-                #'aidermacs--vterm-filter-buffer-substring))
+  ;; Set the keybindings when the mode is activated
+  (when aidermacs-vterm-mode
+    ;; Add the copy function to vterm copy mode map for both C-w and M-w
+    (when (boundp 'vterm-copy-mode-map)
+      (define-key vterm-copy-mode-map (kbd "C-w") #'aidermacs-vterm-copy-with-processing)
+      (define-key vterm-copy-mode-map (kbd "M-w") #'aidermacs-vterm-copy-with-processing))))
 
 (provide 'aidermacs-backend-vterm)
 ;;; aidermacs-backend-vterm.el ends here
