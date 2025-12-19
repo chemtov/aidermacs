@@ -237,14 +237,21 @@ See `aidermacs-theme-colors-plist'."
         '("--dark-mode")
       '("--light-mode"))))
 
-(defun aidermacs-run-vterm (program args buffer-name)
+(defun aidermacs-run-vterm (program args buffer-name &optional recording-file)
   "Create a vterm-based buffer and run aidermacs program.
 PROGRAM is the command to run.  ARGS is a list of command line arguments.
-BUFFER-NAME is the name for the vterm buffer."
+BUFFER-NAME is the name for the vterm buffer.
+Optional RECORDING-FILE, if provided, wraps the command with asciinema recording."
   (unless (require 'vterm nil t)
     (error "Vterm package is not available"))
   (unless (get-buffer buffer-name)
-    (let* ((cmd (mapconcat #'identity (append `(,program ,@(aidermacs--vterm-theme-args)) args) " "))
+    (let* ((aider-cmd (mapconcat #'identity (append `(,program ,@(aidermacs--vterm-theme-args)) args) " "))
+           ;; Wrap with asciinema if recording is enabled
+           (cmd (if recording-file
+                    (format "asciinema rec %s -c %s"
+                            (shell-quote-argument recording-file)
+                            (shell-quote-argument aider-cmd))
+                  aider-cmd))
            (vterm-buffer-name buffer-name)
            (vterm-shell cmd)
            (vterm-kill-buffer-on-exit nil))
@@ -252,7 +259,9 @@ BUFFER-NAME is the name for the vterm buffer."
         (setq-local vterm-max-scrollback 1000
                     aidermacs--vterm-active-timer nil
                     aidermacs--vterm-last-check-point nil
-                    aidermacs--ready t)
+                    aidermacs--ready t
+                    aidermacs--recording-file recording-file
+                    aidermacs--recording-enabled (not (null recording-file)))
         (aidermacs-vterm-mode 1)
         ;; Add cleanup hook
         (add-hook 'kill-buffer-hook #'aidermacs--vterm-cleanup nil t))))

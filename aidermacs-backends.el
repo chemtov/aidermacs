@@ -55,17 +55,18 @@ of using a comint process."
   "Regexp to match Aider's command prompt.")
 
 ;; Backend dispatcher functions
-(defun aidermacs-run-backend (program args buffer-name)
+(defun aidermacs-run-backend (program args buffer-name &optional recording-file)
   "Run aidermacs using the selected backend.
 PROGRAM is the aidermacs executable path.  ARGS are command line arguments.
-BUFFER-NAME is the name for the aidermacs buffer."
+BUFFER-NAME is the name for the aidermacs buffer.
+Optional RECORDING-FILE, if provided, enables asciinema recording (vterm only)."
   (message "Running %s with %s" program args)
   ;; make a copy of process-environment, so that secrets set in the hook is only visible by aider
   (let ((process-environment process-environment))
     (run-hooks 'aidermacs-before-run-backend-hook)
     (cond
      ((eq aidermacs-backend 'vterm)
-      (aidermacs-run-vterm program args buffer-name))
+      (aidermacs-run-vterm program args buffer-name recording-file))
      (t
       (aidermacs-run-comint program args buffer-name)))))
 
