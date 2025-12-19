@@ -119,6 +119,47 @@
                  nil "Should find at least one default template"))))
 
 ;; Test 14: Verify user templates are found and merged with default templates
+
+;; Test 14a: CRITICAL - Verify BOTH user AND default templates are shown together
+;; This test specifically checks that when user templates exist, default templates
+;; are still included in the list (not replaced)
+(let ((temp-user-dir (make-temp-file "aidermacs-user-templates-test14a-" t)))
+  (unwind-protect
+      (let ((aidermacs-user-templates-directory temp-user-dir)
+            (default-dir (aidermacs-templates--get-default-directory)))
+        ;; Only run this test if we have default templates
+        (when default-dir
+          ;; Create a user template with a UNIQUE name (not overriding any default)
+          (with-temp-file (expand-file-name "my-unique-template.txt" temp-user-dir)
+            (insert "/ask {Question}"))
+
+          ;; Get the list of templates
+          (let* ((all-templates (aidermacs-templates--list-templates))
+                 (template-names (mapcar #'car all-templates))
+                 (default-templates (aidermacs-templates--list-templates-from-dir default-dir))
+                 (default-names (mapcar #'car default-templates)))
+
+            (message "Test 14a - User templates dir: %s" temp-user-dir)
+            (message "Test 14a - Default templates dir: %s" default-dir)
+            (message "Test 14a - All template names: %s" template-names)
+            (message "Test 14a - Default template names: %s" default-names)
+
+            ;; CRITICAL: Should have the user template
+            (cl-assert (member "my-unique-template" template-names)
+                       nil "Should find user template 'my-unique-template'")
+
+            ;; CRITICAL: Should ALSO have ALL default templates
+            (dolist (default-name default-names)
+              (cl-assert (member default-name template-names)
+                         nil (format "Should find default template '%s' in merged list" default-name)))
+
+            ;; CRITICAL: Total count should be user templates + default templates
+            (let ((expected-count (+ 1 (length default-names))))
+              (cl-assert (= (length all-templates) expected-count)
+                         nil (format "Should have %d templates (1 user + %d default), but got %d"
+                                     expected-count (length default-names) (length all-templates)))))))
+    (delete-directory temp-user-dir t)))
+
 (let ((temp-user-dir (make-temp-file "aidermacs-user-templates-" t)))
   (unwind-protect
       (let ((aidermacs-user-templates-directory temp-user-dir))
@@ -175,6 +216,25 @@
     (delete-directory temp-dir t)))
 
 ;; Test 16: Verify template processing with real template files
+
+;; Test 17: Diagnostic - Show what templates are actually available
+(message "\n=== DIAGNOSTIC TEST 17 ===")
+(message "User templates directory: %s" aidermacs-user-templates-directory)
+(message "User templates directory exists: %s" (file-directory-p aidermacs-user-templates-directory))
+(let ((default-dir (aidermacs-templates--get-default-directory)))
+  (message "Default templates directory: %s" default-dir)
+  (message "Default templates directory exists: %s" (and default-dir (file-directory-p default-dir)))
+  (when default-dir
+    (let ((default-templates (aidermacs-templates--list-templates-from-dir default-dir)))
+      (message "Default templates found: %s" (mapcar #'car default-templates))))
+  (when (file-directory-p aidermacs-user-templates-directory)
+    (let ((user-templates (aidermacs-templates--list-templates-from-dir aidermacs-user-templates-directory)))
+      (message "User templates found: %s" (mapcar #'car user-templates))))
+  (let ((all-templates (aidermacs-templates--list-templates)))
+    (message "All templates (merged): %s" (mapcar #'car all-templates))
+    (message "Total template count: %d" (length all-templates))))
+(message "=== END DIAGNOSTIC ===\n")
+
 (let ((temp-dir (make-temp-file "aidermacs-process-test-" t)))
   (unwind-protect
       (let ((aidermacs-user-templates-directory temp-dir))

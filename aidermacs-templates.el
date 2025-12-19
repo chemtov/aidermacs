@@ -222,6 +222,54 @@ Prompts for template name and content, then saves it to the templates directory.
 
 ;;;###autoload
 (defun aidermacs-open-templates-directory ()
+
+;;;###autoload
+(defun aidermacs-templates-diagnose ()
+  "Diagnose template system configuration and show what templates are found.
+This is useful for debugging template discovery issues."
+  (interactive)
+  (with-current-buffer (get-buffer-create "*Aidermacs Templates Diagnostic*")
+    (erase-buffer)
+    (insert "=== Aidermacs Templates Diagnostic ===\n\n")
+
+    ;; User templates directory
+    (insert (format "User templates directory: %s\n" aidermacs-user-templates-directory))
+    (insert (format "  Exists: %s\n" (file-directory-p aidermacs-user-templates-directory)))
+    (when (file-directory-p aidermacs-user-templates-directory)
+      (let ((user-templates (aidermacs-templates--list-templates-from-dir 
+                             aidermacs-user-templates-directory)))
+        (insert (format "  Found %d user templates: %s\n\n" 
+                        (length user-templates)
+                        (mapcar #'car user-templates)))))
+
+    ;; Default templates directory
+    (let ((default-dir (aidermacs-templates--get-default-directory)))
+      (insert (format "Default templates directory: %s\n" (or default-dir "nil")))
+      (insert (format "  Exists: %s\n" (and default-dir (file-directory-p default-dir))))
+      (when default-dir
+        (let ((default-templates (aidermacs-templates--list-templates-from-dir default-dir)))
+          (insert (format "  Found %d default templates: %s\n\n" 
+                          (length default-templates)
+                          (mapcar #'car default-templates))))))
+
+    ;; Merged templates
+    (let ((all-templates (aidermacs-templates--list-templates)))
+      (insert (format "All templates (merged): %s\n" (mapcar #'car all-templates)))
+      (insert (format "Total template count: %d\n\n" (length all-templates))))
+
+    ;; File extensions
+    (insert (format "Template file extensions: %s\n" aidermacs-templates-file-extension))
+
+    ;; Load context
+    (insert (format "\nLoad context:\n"))
+    (insert (format "  load-file-name: %s\n" load-file-name))
+    (insert (format "  buffer-file-name: %s\n" (buffer-file-name)))
+    (insert (format "  locate-library result: %s\n" (locate-library "aidermacs-templates")))
+
+    (goto-char (point-min))
+    (special-mode)
+    (display-buffer (current-buffer))))
+
   "Open the user templates directory in Dired."
   (interactive)
   (aidermacs-templates--ensure-directory)
