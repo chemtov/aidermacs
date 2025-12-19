@@ -6,3 +6,10 @@ __pycache__
 # ELPA-generated files.
 /aidermacs-pkg.el
 /aidermacs-autoloads.el
+
+
+# Test dependencies cache (old)
+.test-elpa/
+
+# Eask sandbox directory
+.eask/
