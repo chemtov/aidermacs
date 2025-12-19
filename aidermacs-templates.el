@@ -36,9 +36,9 @@ This is the primary location for creating and managing personal templates."
   :type 'directory
   :group 'aidermacs-templates)
 
-(defcustom aidermacs-templates-file-extension ".txt"
-  "File extension for template files."
-  :type 'string
+(defcustom aidermacs-templates-file-extension '(".txt" ".md")
+  "File extensions for template files. This can be a list of strings."
+  :type '(repeat string)
   :group 'aidermacs-templates)
 
 (defvar aidermacs-templates--placeholder-regexp
@@ -60,8 +60,12 @@ Matches text in the format {Prompt-Text}.")
   "Return a list of templates from DIR.
 Returns an alist of (display-name . file-path) pairs."
   (when (file-directory-p dir)
-    (let* ((files (directory-files dir t
-                                   (concat (regexp-quote aidermacs-templates-file-extension) "$")))
+    (let* ((regexp (concat "\\("
+                           (mapconcat (lambda (ext) (regexp-quote ext))
+                                      aidermacs-templates-file-extension
+                                      "\\|")
+                           "\\)$"))
+           (files (directory-files dir t regexp))
            (templates (mapcar (lambda (file)
                                (cons (file-name-sans-extension
                                       (file-name-nondirectory file))
@@ -159,10 +163,15 @@ Prompts for template name and content, then saves it to the templates directory.
   (aidermacs-templates--ensure-directory)
   (let* ((name (read-string "Template name: "))
          (content (read-string "Template content (use {Placeholder} for inputs): "))
+         (extension (if (= 1 (length aidermacs-templates-file-extension))
+                        (car aidermacs-templates-file-extension)
+                      (completing-read "Select file extension: "
+                                       aidermacs-templates-file-extension
+                                       nil t (car aidermacs-templates-file-extension))))
          (file-path (expand-file-name
-                    (concat name aidermacs-templates-file-extension)
-                    aidermacs-user-templates-directory)))
-    (when (and name content (not (string-empty-p name)) (not (string-empty-p content)))
+                     (concat name extension)
+                     aidermacs-user-templates-directory)))
+    (when (and name content extension (not (string-empty-p name)) (not (string-empty-p content)))
       (with-temp-file file-path
         (insert content))
       (message "Template '%s' created at %s" name file-path))))

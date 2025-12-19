@@ -42,23 +42,26 @@
 ;; --- Filesystem tests ---
 (let ((temp-dir (make-temp-directory "aidermacs-templates-test-")))
   (unwind-protect
-      (let ((aidermacs-user-templates-directory temp-dir))
+      (let ((aidermacs-user-templates-directory temp-dir)
+            (aidermacs-templates-file-extension '(".txt" ".md")))
         (flet ((aidermacs-templates--get-default-directory ()
                  ;; Return a non-existent dir to isolate user templates
                  (expand-file-name "non-existent" temp-dir)))
 
           ;; Test 6: List templates from user directory
-          (with-temp-file (expand-file-name (concat "test1" aidermacs-templates-file-extension) temp-dir)
+          (with-temp-file (expand-file-name "test1.txt" temp-dir)
             (insert "content1"))
-          (with-temp-file (expand-file-name (concat "test2" aidermacs-templates-file-extension) temp-dir)
+          (with-temp-file (expand-file-name "test2.md" temp-dir)
             (insert "content2"))
+          (with-temp-file (expand-file-name "test3.org" temp-dir)
+            (insert "content3"))
           (let* ((templates (aidermacs-templates--list-templates))
                  (template-names (sort (mapcar #'car templates) #'string<)))
             (message "Test 6 - List templates: %s" template-names)
             (cl-assert (equal template-names '("test1" "test2"))))
 
           ;; Test 7: Read template content
-          (let ((file (expand-file-name (concat "read-test" aidermacs-templates-file-extension) temp-dir)))
+          (let ((file (expand-file-name "read-test.txt" temp-dir)))
             (with-temp-file file
               (insert "Hello template"))
             (let ((content (aidermacs-templates--read-template file)))

@@ -30,8 +30,8 @@ If you're using `straight.el`, here's the recommended configuration:
   ;; Customize user templates directory (optional)
   (aidermacs-user-templates-directory 
    (expand-file-name "my-aider-templates" user-emacs-directory))
-  ;; Customize template file extension (optional)
-  (aidermacs-templates-file-extension ".txt")
+  ;; Customize template file extensions (optional)
+  (aidermacs-templates-file-extension '(".txt" ".md"))
   :config
   ;; Set API keys
   (setenv "ANTHROPIC_API_KEY" "sk-...")
@@ -60,8 +60,8 @@ You can customize the template system using these variables:
 ;; Change user templates directory
 (setq aidermacs-user-templates-directory "~/my-templates")
 
-;; Change template file extension
-(setq aidermacs-templates-file-extension ".template")
+;; Change template file extensions (can be a list)
+(setq aidermacs-templates-file-extension '(".template" ".md"))
 ```
 
 Or using `:custom` in `use-package`:
@@ -97,7 +97,7 @@ Please analyze the content and {What-to-do-with-it}
 
 #### Method 2: Manual File Creation
 
-Create a `.txt` file in your templates directory:
+Create a `.txt` or `.md` file in your templates directory:
 
 ```bash
 # File: ~/.emacs.d/aidermacs-templates/my-template.txt
@@ -319,7 +319,7 @@ In the aidermacs transient menu:
    M-: aidermacs-templates-file-extension
    ```
 
-3. Ensure files have correct extension (default: `.txt`)
+3. Ensure files have correct extension (default: `'.txt'` and `'.md'`)
 
 ### Placeholders Not Being Replaced
 
@@ -340,7 +340,7 @@ In the aidermacs transient menu:
 ### Variables
 
 - `aidermacs-user-templates-directory` - Directory for user-created template files
-- `aidermacs-templates-file-extension` - File extension for templates (default: ".txt")
+- `aidermacs-templates-file-extension` - File extensions for templates (default: `'(".txt" ".md")`)
 
 ## Contributing Templates
 
