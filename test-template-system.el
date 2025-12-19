@@ -605,6 +605,55 @@ Content"))
   (kill-buffer buffer))
 
 ;; Test 32: Confirm and use callback
+
+;; Test 32a: Prevent double send with flag
+(let ((buffer (get-buffer-create "*Test Double Send*"))
+      (send-count 0))
+  (with-current-buffer buffer
+    (erase-buffer)
+    (insert "Template content")
+    (setq aidermacs-templates--edit-buffer-callback
+          (lambda (text) (setq send-count (1+ send-count)))))
+  ;; Mock yes-or-no-p to avoid interactive prompts
+  (cl-letf (((symbol-function 'yes-or-no-p) (lambda (_) t)))
+    ;; First call should work
+    (with-current-buffer buffer
+      (aidermacs-templates-confirm-and-use))
+    (message "Test 32a - Send count after first call: %d" send-count)
+    (cl-assert (= send-count 1)
+               nil "Callback should be called once on first C-c C-c")
+    (cl-assert (not (get-buffer "*Test Double Send*"))
+               nil "Buffer should be killed after first send")))
+
+;; Test 32b: Verify flag prevents second send (if buffer wasn't killed)
+(let ((buffer (get-buffer-create "*Test Double Send 2*"))
+      (send-count 0))
+  (with-current-buffer buffer
+    (erase-buffer)
+    (insert "Template content")
+    (setq aidermacs-templates--edit-buffer-callback
+          (lambda (text) (setq send-count (1+ send-count)))))
+  ;; Mock kill-buffer to prevent actual killing so we can test second call
+  (cl-letf (((symbol-function 'kill-buffer) (lambda (_) nil))
+            ((symbol-function 'yes-or-no-p) (lambda (_) t)))
+    ;; First call
+    (with-current-buffer buffer
+      (aidermacs-templates-confirm-and-use))
+    (message "Test 32b - Send count after first call: %d" send-count)
+    (cl-assert (= send-count 1)
+               nil "Callback should be called once")
+    (cl-assert (with-current-buffer buffer aidermacs-templates--edit-buffer-sent)
+               nil "Flag should be set after first send")
+    ;; Second call should be blocked
+    (with-current-buffer buffer
+      (aidermacs-templates-confirm-and-use))
+    (message "Test 32b - Send count after second call: %d" send-count)
+    (cl-assert (= send-count 1)
+               nil "Callback should NOT be called on second C-c C-c")
+    (cl-assert (with-current-buffer buffer aidermacs-templates--edit-buffer-sent)
+               nil "Flag should still be set"))
+  (kill-buffer "*Test Double Send 2*"))
+
 (let ((buffer (get-buffer-create "*Test Callback*"))
       (callback-result nil))
   (with-current-buffer buffer

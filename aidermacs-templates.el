@@ -71,6 +71,11 @@ Matches text in the format {Prompt-Text}.")
 (defvar-local aidermacs-templates--edit-buffer-callback nil
   "Callback function to execute when template editing is confirmed.")
 
+
+(defvar-local aidermacs-templates--edit-buffer-sent nil
+  "Flag indicating whether the template has been sent to aidermacs.
+This prevents accidentally sending the same template multiple times.")
+
 (defun aidermacs-templates--get-default-directory ()
   "Return the directory where default templates are stored with the package.
 Returns nil if the templates directory cannot be located or doesn't exist."
@@ -355,13 +360,20 @@ and CALLBACK is called when the user confirms with C-c C-c."
     (message "Edit template: C-c C-c to use, C-c C-k to cancel, C-c C-n to save as new")))
 
 (defun aidermacs-templates-confirm-and-use ()
-  "Confirm the template and send it to aidermacs."
+  "Confirm the template and send it to aidermacs.
+Can only be used once per template to prevent duplicate sends."
   (interactive)
-  (when aidermacs-templates--edit-buffer-callback
+  (cond
+   (aidermacs-templates--edit-buffer-sent
+    (message "Template already sent. Use C-c C-n to save as new template, or C-c C-k to close."))
+   (aidermacs-templates--edit-buffer-callback
     (let ((content (buffer-string)))
+      (setq aidermacs-templates--edit-buffer-sent t)
       (aidermacs-templates--clear-highlights (current-buffer))
       (funcall aidermacs-templates--edit-buffer-callback content)
-      (kill-buffer (current-buffer)))))
+      (kill-buffer (current-buffer))))
+   (t
+    (message "No callback configured for this template buffer."))))
 
 (defun aidermacs-templates-cancel ()
   "Cancel template editing and close the buffer."

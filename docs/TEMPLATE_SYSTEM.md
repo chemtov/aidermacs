@@ -15,7 +15,7 @@ The Aidermacs template system allows you to create reusable prompt templates wit
 - **Current Question Highlighting**: The placeholder being asked is highlighted differently to show which question you're answering
 - **Smart Mode Detection**: Preview buffer automatically uses the correct major mode (text-mode for .txt, markdown-mode for .md, org-mode for .org)
 - **Interactive Editing**: After filling placeholders, edit the template before sending
-- **Flexible Actions**: Use C-c C-c to send, C-c C-k to cancel, or C-c C-n to save as new template
+- **Flexible Actions**: Use C-c C-c to send (once only), C-c C-k to cancel, or C-c C-n to save as new template
 - **Full Integration**: Works seamlessly with aidermacs command sending infrastructure
 
 ## Installation and Configuration
@@ -145,7 +145,7 @@ Create a `.txt` or `.md` file in your templates directory:
 4. Fill in each placeholder when prompted - the template updates in real-time with highlighting
 5. After all placeholders are filled, you can:
    - **Edit the template** - Make any final adjustments
-   - **C-c C-c** - Confirm and send the template to aidermacs
+   - **C-c C-c** - Confirm and send the template to aidermacs (can only be used once to prevent duplicate sends)
    - **C-c C-k** - Cancel and close the template buffer
    - **C-c C-n** - Save the edited template as a new template file
 

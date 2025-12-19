@@ -16,7 +16,7 @@ Added a comprehensive template system for creating reusable prompts with dynamic
 - **Current question highlighting** - The placeholder being asked is highlighted differently (with warning face and underline by default)
 - **Smart mode detection** - Preview buffer uses correct major mode based on file extension
 - **Interactive editing** - Edit template after filling placeholders before sending
-- **Flexible actions** - C-c C-c to send, C-c C-k to cancel, C-c C-n to save as new
+- **Flexible actions** - C-c C-c to send (once only to prevent duplicates), C-c C-k to cancel, C-c C-n to save as new
 - Full integration with aidermacs command infrastructure
 - Template management commands (create, edit, delete, list)
 - Configurable template directory and highlight face
