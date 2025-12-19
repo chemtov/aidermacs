@@ -6,8 +6,11 @@
 1. Open aidermacs transient menu: `M-x aidermacs-transient-menu`
 2. Press `P` (Use Template)
 3. Select a template
-4. Fill in the prompts
-5. Done! Command is sent automatically
+4. **See live preview** - Template appears in a buffer
+5. **Fill in the prompts** - Watch placeholders get highlighted in real-time
+6. **Edit if needed** - Make final adjustments
+7. **Press C-c C-c** to send, C-c C-k to cancel, or C-c C-n to save as new
+8. Done!
 
 ### Create a Template
 1. Press `N` (Create Template)
@@ -47,6 +50,18 @@ Tech stack: {Technology}
 ```
 
 ## ⌨️ Keybindings (in transient menu)
+
+### Template Editing Keybindings
+
+When editing a template (after filling placeholders):
+
+| Key | Action |
+|-----|--------|
+| `C-c C-c` | Confirm and send template to aidermacs |
+| `C-c C-k` | Cancel editing and close buffer |
+| `C-c C-n` | Save edited template as a new template |
+
+### Transient Menu Keybindings
 
 | Key | Action |
 |-----|--------|
