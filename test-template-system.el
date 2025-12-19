@@ -104,6 +104,106 @@
     (delete-directory temp-dir t)))
 
 ;; Test 12: Simulate the exact error condition from backtrace
+
+;; Test 13: Verify default templates are found from package directory
+(let ((default-dir (aidermacs-templates--get-default-directory)))
+  (message "Test 13 - Default templates directory: %s" default-dir)
+  (cl-assert (or (null default-dir) (file-directory-p default-dir))
+             nil "Default directory should be nil or a valid directory")
+  (when default-dir
+    (let ((templates (aidermacs-templates--list-templates-from-dir default-dir)))
+      (message "Test 13 - Found %d default templates: %s"
+               (length templates)
+               (mapcar #'car templates))
+      (cl-assert (> (length templates) 0)
+                 nil "Should find at least one default template"))))
+
+;; Test 14: Verify user templates are found and merged with default templates
+(let ((temp-user-dir (make-temp-file "aidermacs-user-templates-" t)))
+  (unwind-protect
+      (let ((aidermacs-user-templates-directory temp-user-dir))
+        ;; Create some user templates
+        (with-temp-file (expand-file-name "user-template-1.txt" temp-user-dir)
+          (insert "/ask {Question}"))
+        (with-temp-file (expand-file-name "user-template-2.md" temp-user-dir)
+          (insert "/code {Task}"))
+        ;; Create a user template that overrides a default one
+        (with-temp-file (expand-file-name "code-review.txt" temp-user-dir)
+          (insert "User's custom code review template"))
+
+        (let* ((all-templates (aidermacs-templates--list-templates))
+               (template-names (mapcar #'car all-templates)))
+          (message "Test 14 - All templates: %s" template-names)
+          ;; Should have user templates
+          (cl-assert (member "user-template-1" template-names)
+                     nil "Should find user-template-1")
+          (cl-assert (member "user-template-2" template-names)
+                     nil "Should find user-template-2")
+          ;; Should have default templates (if default dir exists)
+          (when (aidermacs-templates--get-default-directory)
+            (cl-assert (member "code-review" template-names)
+                       nil "Should find code-review template")
+            ;; Verify user template takes precedence
+            (let ((code-review-path (cdr (assoc "code-review" all-templates))))
+              (cl-assert (string-prefix-p temp-user-dir code-review-path)
+                         nil "User template should take precedence over default")))))
+    (delete-directory temp-user-dir t)))
+
+;; Test 15: Verify multiple file extensions are supported
+(let ((temp-dir (make-temp-file "aidermacs-ext-test-" t)))
+  (unwind-protect
+      (let ((aidermacs-user-templates-directory temp-dir)
+            (aidermacs-templates-file-extension '(".txt" ".md" ".org")))
+        ;; Create templates with different extensions
+        (with-temp-file (expand-file-name "template1.txt" temp-dir)
+          (insert "txt template"))
+        (with-temp-file (expand-file-name "template2.md" temp-dir)
+          (insert "md template"))
+        (with-temp-file (expand-file-name "template3.org" temp-dir)
+          (insert "org template"))
+        (with-temp-file (expand-file-name "ignored.el" temp-dir)
+          (insert "should be ignored"))
+
+        ;; Mock get-default-directory to return nil for this test
+        (cl-letf (((symbol-function 'aidermacs-templates--get-default-directory)
+                   (lambda () nil)))
+          (let* ((templates (aidermacs-templates--list-templates))
+                 (template-names (sort (mapcar #'car templates) #'string<)))
+            (message "Test 15 - Templates with multiple extensions: %s" template-names)
+            (cl-assert (equal template-names '("template1" "template2" "template3"))
+                       nil "Should find templates with all configured extensions"))))
+    (delete-directory temp-dir t)))
+
+;; Test 16: Verify template processing with real template files
+(let ((temp-dir (make-temp-file "aidermacs-process-test-" t)))
+  (unwind-protect
+      (let ((aidermacs-user-templates-directory temp-dir))
+        ;; Create a template with placeholders
+        (with-temp-file (expand-file-name "test-process.txt" temp-dir)
+          (insert "/web {URL}\n\nAnalyze {Topic} and provide {Output-Format}"))
+
+        (let* ((template-file (expand-file-name "test-process.txt" temp-dir))
+               (template-text (aidermacs-templates--read-template template-file))
+               (placeholders (aidermacs-templates--extract-placeholders template-text)))
+          (message "Test 16 - Extracted placeholders: %s" placeholders)
+          (cl-assert (equal placeholders '("URL" "Topic" "Output-Format"))
+                     nil "Should extract all placeholders in order")
+
+          ;; Test replacement
+          (let* ((replacements '(("URL" . "https://example.com")
+                                ("Topic" . "AI trends")
+                                ("Output-Format" . "bullet points")))
+                 (result (aidermacs-templates--replace-placeholders template-text replacements)))
+            (message "Test 16 - Processed template: %s" result)
+            (cl-assert (string-match-p "https://example.com" result)
+                       nil "Should replace URL placeholder")
+            (cl-assert (string-match-p "AI trends" result)
+                       nil "Should replace Topic placeholder")
+            (cl-assert (string-match-p "bullet points" result)
+                       nil "Should replace Output-Format placeholder")
+            (cl-assert (not (string-match-p "{" result))
+                       nil "Should not have any remaining placeholders"))))
+    (delete-directory temp-dir t)))
 ;; (calling from a buffer with no file-name and no load-file-name)
 (let ((temp-dir (make-temp-file "aidermacs-templates-test-" t)))
   (unwind-protect

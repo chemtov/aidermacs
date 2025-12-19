@@ -48,14 +48,17 @@ Matches text in the format {Prompt-Text}.")
 
 (defun aidermacs-templates--get-default-directory ()
   "Return the directory where default templates are stored with the package.
-Returns nil if the templates directory cannot be located."
+Returns nil if the templates directory cannot be located or doesn't exist."
   (let* ((source-file (or load-file-name
                           (buffer-file-name)
                           ;; Try to locate the library if loaded from compiled code
                           (locate-library "aidermacs-templates")))
-         (el-file-dir (when source-file (file-name-directory source-file))))
-    (when el-file-dir
-      (expand-file-name "templates" el-file-dir))))
+         (el-file-dir (when source-file (file-name-directory source-file)))
+         (templates-dir (when el-file-dir
+                          (expand-file-name "templates" el-file-dir))))
+    ;; Only return the directory if it actually exists
+    (when (and templates-dir (file-directory-p templates-dir))
+      templates-dir)))
 
 (defun aidermacs-templates--ensure-directory ()
   "Ensure the user templates directory exists, creating it if necessary."
@@ -95,8 +98,9 @@ Returns an alist of (display-name . file-path) pairs."
          (default-templates (aidermacs-templates--list-templates-from-dir default-dir))
          (user-templates (aidermacs-templates--list-templates-from-dir user-dir))
          ;; User templates come first to take precedence
+         ;; :from-end t keeps the first occurrence (user) when duplicates exist
          (merged (cl-remove-duplicates (append user-templates default-templates)
-                                       :key #'car :test #'string=)))
+                                       :key #'car :test #'string= :from-end t)))
     merged))
 
 (defun aidermacs-templates--read-template (file-path)
