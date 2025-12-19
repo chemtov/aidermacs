@@ -12,19 +12,29 @@ The Aidermacs template system allows you to create reusable prompt templates wit
 - **Interactive Replacement**: Placeholders are replaced via `completing-read` prompts
 - **Full Integration**: Works seamlessly with aidermacs command sending infrastructure
 
-## Installation
+## Installation and Configuration
 
-The template system is automatically loaded when you use
-aidermacs. Templates are stored in:
+The template system is automatically loaded with aidermacs. No special setup is needed.
 
-```elisp
-~/.emacs.d/aidermacs-templates/
-```
+### Template Locations
 
-You can customize this location:
+Aidermacs searches for templates in two locations:
 
-```elisp
-(setq aidermacs-templates-directory "/path/to/your/templates")
+1.  **Default Templates**: A set of example templates is bundled with the aidermacs package. These are located in a `templates` subdirectory within the package installation directory. These files should not be edited directly as they may be overwritten during updates.
+
+2.  **User Templates**: Your personal templates are stored in `~/.emacs.d/aidermacs-templates/`. This is the place to create, edit, and manage your own templates. If a user template has the same name as a default template, the user's version will be used.
+
+### Example `use-package` setup
+
+If you are using `use-package`, here is a sample configuration. This setup ensures that the bundled templates are correctly located.
+
+```emacs-lisp
+(use-package aidermacs
+  ;; Example for straight.el users:
+  ;; :straight (aidermacs :type git :host github :repo "MatthewZMD/aidermacs")
+  :config
+  ;; Your aidermacs configuration here
+  )
 ```
 
 ## Usage
@@ -230,10 +240,12 @@ Templates can use any aider command:
 
 ## Configuration
 
-### Custom Template Directory
+### Custom User Template Directory
+
+You can customize the user templates directory:
 
 ```elisp
-(setq aidermacs-templates-directory "~/my-aider-templates")
+(setq aidermacs-user-templates-directory "~/my-aider-templates")
 ```
 
 ### Custom File Extension

@@ -29,10 +29,10 @@
   "Template system for aidermacs prompts."
   :group 'aidermacs)
 
-(defcustom aidermacs-templates-directory
+(defcustom aidermacs-user-templates-directory
   (expand-file-name "aidermacs-templates" user-emacs-directory)
-  "Directory where aidermacs prompt templates are stored.
-Each file in this directory represents a template."
+  "Directory where user-created aidermacs prompt templates are stored.
+This is the primary location for creating and managing personal templates."
   :type 'directory
   :group 'aidermacs-templates)
 
@@ -46,23 +46,42 @@ Each file in this directory represents a template."
   "Regular expression to match template placeholders.
 Matches text in the format {Prompt-Text}.")
 
+(defun aidermacs-templates--get-default-directory ()
+  "Return the directory where default templates are stored with the package."
+  (let ((el-file-dir (file-name-directory (or load-file-name (buffer-file-name)))))
+    (expand-file-name "templates" el-file-dir)))
+
 (defun aidermacs-templates--ensure-directory ()
-  "Ensure the templates directory exists, creating it if necessary."
-  (unless (file-exists-p aidermacs-templates-directory)
-    (make-directory aidermacs-templates-directory t)))
+  "Ensure the user templates directory exists, creating it if necessary."
+  (unless (file-exists-p aidermacs-user-templates-directory)
+    (make-directory aidermacs-user-templates-directory t)))
+
+(defun aidermacs-templates--list-templates-from-dir (dir)
+  "Return a list of templates from DIR.
+Returns an alist of (display-name . file-path) pairs."
+  (when (file-directory-p dir)
+    (let* ((files (directory-files dir t
+                                   (concat (regexp-quote aidermacs-templates-file-extension) "$")))
+           (templates (mapcar (lambda (file)
+                               (cons (file-name-sans-extension
+                                      (file-name-nondirectory file))
+                                     file))
+                             files)))
+      templates)))
 
 (defun aidermacs-templates--list-templates ()
-  "Return a list of available template files.
+  "Return a list of available template files from default and user directories.
+User templates will override default templates with the same name.
 Returns an alist of (display-name . file-path) pairs."
   (aidermacs-templates--ensure-directory)
-  (let* ((files (directory-files aidermacs-templates-directory t
-                                 (concat (regexp-quote aidermacs-templates-file-extension) "$")))
-         (templates (mapcar (lambda (file)
-                             (cons (file-name-sans-extension
-                                    (file-name-nondirectory file))
-                                   file))
-                           files)))
-    templates))
+  (let* ((default-dir (aidermacs-templates--get-default-directory))
+         (user-dir aidermacs-user-templates-directory)
+         (default-templates (aidermacs-templates--list-templates-from-dir default-dir))
+         (user-templates (aidermacs-templates--list-templates-from-dir user-dir))
+         ;; User templates come first to take precedence
+         (merged (delete-dups (append user-templates default-templates)
+                              :key #'car :test #'string=)))
+    merged))
 
 (defun aidermacs-templates--read-template (file-path)
   "Read template content from FILE-PATH."
@@ -119,7 +138,7 @@ the resulting command to aidermacs."
   (interactive)
   (let* ((templates (aidermacs-templates--list-templates)))
     (if (null templates)
-        (message "No templates found in %s" aidermacs-templates-directory)
+        (message "No templates found in default or user template directories.")
       (let* ((template-name (completing-read "Select template: "
                                             (mapcar #'car templates)
                                             nil t))
@@ -142,7 +161,7 @@ Prompts for template name and content, then saves it to the templates directory.
          (content (read-string "Template content (use {Placeholder} for inputs): "))
          (file-path (expand-file-name
                     (concat name aidermacs-templates-file-extension)
-                    aidermacs-templates-directory)))
+                    aidermacs-user-templates-directory)))
     (when (and name content (not (string-empty-p name)) (not (string-empty-p content)))
       (with-temp-file file-path
         (insert content))
@@ -178,10 +197,10 @@ Prompts for template name and content, then saves it to the templates directory.
 
 ;;;###autoload
 (defun aidermacs-open-templates-directory ()
-  "Open the templates directory in Dired."
+  "Open the user templates directory in Dired."
   (interactive)
   (aidermacs-templates--ensure-directory)
-  (dired aidermacs-templates-directory))
+  (dired aidermacs-user-templates-directory))
 
 (provide 'aidermacs-templates)
 ;;; aidermacs-templates.el ends here
