@@ -40,6 +40,7 @@
 (require 'aidermacs-backends)
 (require 'aidermacs-models)
 (require 'aidermacs-output)
+(require 'aidermacs-templates)
 
 (declare-function magit-show-commit "magit-diff")
 
@@ -304,7 +305,15 @@ This is the file name without path."
     ("i" "Implement TODO" aidermacs-implement-todo)
     ("t" "Write Test" aidermacs-write-unit-test)
     ("T" "Fix Test" aidermacs-fix-failing-test-under-cursor)
-    ("!" "Debug Exception" aidermacs-debug-exception)]])
+    ("!" "Debug Exception" aidermacs-debug-exception)]]
+  ["Templates"
+   ["Use Templates"
+    ("P" "Use Template" aidermacs-use-template)
+    ("N" "Create Template" aidermacs-create-template)]
+   ["Manage Templates"
+    ("E" "Edit Template" aidermacs-edit-template)
+    ("D" "Delete Template" aidermacs-delete-template)
+    ("O" "Open Templates Dir" aidermacs-open-templates-directory)]])
 
 (defun aidermacs-select-buffer-name ()
   "Select an existing aidermacs session buffer.

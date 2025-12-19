@@ -1,0 +1,3 @@
+/web {Enter-URL}
+
+Please analyze the content from the URL above and {What-to-do-with-it}

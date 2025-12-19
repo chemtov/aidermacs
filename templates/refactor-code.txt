@@ -1,0 +1,7 @@
+/code Refactor the code to {Refactoring-Goal}
+
+Please ensure:
+- Maintain existing functionality
+- Improve code readability
+- Follow {Coding-Standard} standards
+- Update any related documentation
