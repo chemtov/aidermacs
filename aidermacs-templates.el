@@ -79,8 +79,8 @@ Returns an alist of (display-name . file-path) pairs."
          (default-templates (aidermacs-templates--list-templates-from-dir default-dir))
          (user-templates (aidermacs-templates--list-templates-from-dir user-dir))
          ;; User templates come first to take precedence
-         (merged (delete-dups (append user-templates default-templates)
-                              :key #'car :test #'string=)))
+         (merged (cl-delete-duplicates (append user-templates default-templates)
+                                       :key #'car :test #'string=)))
     merged))
 
 (defun aidermacs-templates--read-template (file-path)
