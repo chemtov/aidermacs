@@ -11,9 +11,13 @@ Added a comprehensive template system for creating reusable prompts with dynamic
 **Key Features:**
 - Create templates as simple text files with `{Placeholder}` syntax
 - Interactive placeholder replacement via `completing-read`
+- **Live template preview** - Template displayed in buffer during placeholder collection
+- **Real-time highlighting** - Filled placeholders highlighted as you answer questions
+- **Interactive editing** - Edit template after filling placeholders before sending
+- **Flexible actions** - C-c C-c to send, C-c C-k to cancel, C-c C-n to save as new
 - Full integration with aidermacs command infrastructure
 - Template management commands (create, edit, delete, list)
-- Configurable template directory
+- Configurable template directory and highlight face
 
 **New Commands:**
 - `aidermacs-use-template` - Select and execute a template
@@ -31,8 +35,9 @@ Added a comprehensive template system for creating reusable prompts with dynamic
   - `O` - Open Templates Directory
 
 **Configuration:**
-- `aidermacs-templates-directory` - Template storage location (default: `~/.emacs.d/aidermacs-templates/`)
-- `aidermacs-templates-file-extension` - Template file extension (default: `.txt`)
+- `aidermacs-user-templates-directory` - Template storage location (default: `~/.emacs.d/aidermacs-templates/`)
+- `aidermacs-templates-file-extension` - Template file extensions (default: `'(".txt" ".md")`)
+- `aidermacs-templates-filled-placeholder-face` - Face for highlighting filled placeholders (default: `'highlight`)
 
 **Example Templates Included:**
 1. `fetch-and-analyze-url.txt` - Web content analysis

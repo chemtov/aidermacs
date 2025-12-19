@@ -41,6 +41,11 @@ This is the primary location for creating and managing personal templates."
   :type '(repeat string)
   :group 'aidermacs-templates)
 
+(defcustom aidermacs-templates-filled-placeholder-face 'highlight
+  "Face used to highlight filled placeholders in template editing buffer."
+  :type 'face
+  :group 'aidermacs-templates)
+
 (defvar aidermacs-templates--placeholder-regexp
   "{\\([^}]+\\)}"
   "Regular expression to match template placeholders.
@@ -51,6 +56,15 @@ Matches text in the format {Prompt-Text}.")
 
 (defvar aidermacs-templates--metadata-fields '("title" "description" "command")
   "List of supported metadata field names in template headers.")
+
+(defvar-local aidermacs-templates--edit-buffer-template-text nil
+  "Original template text being edited in the current buffer.")
+
+(defvar-local aidermacs-templates--edit-buffer-replacements nil
+  "Alist of placeholder replacements for the current template buffer.")
+
+(defvar-local aidermacs-templates--edit-buffer-callback nil
+  "Callback function to execute when template editing is confirmed.")
 
 (defun aidermacs-templates--get-default-directory ()
   "Return the directory where default templates are stored with the package.
@@ -229,13 +243,145 @@ Returns the processed template string ready to be sent as a command."
       template-text)))
 
 ;;;###autoload
+(defun aidermacs-templates--highlight-filled-placeholders (buffer replacements)
+  "Highlight filled placeholders in BUFFER using REPLACEMENTS.
+REPLACEMENTS is an alist of (placeholder . value) pairs."
+  (with-current-buffer buffer
+    (save-excursion
+      (goto-char (point-min))
+      (dolist (replacement replacements)
+        (let* ((placeholder (car replacement))
+               (value (cdr replacement))
+               (pattern (regexp-quote value)))
+          (goto-char (point-min))
+          (while (re-search-forward pattern nil t)
+            (let ((overlay (make-overlay (match-beginning 0) (match-end 0))))
+              (overlay-put overlay 'face aidermacs-templates-filled-placeholder-face)
+              (overlay-put overlay 'aidermacs-template-highlight t))))))))
+
+(defun aidermacs-templates--clear-highlights (buffer)
+  "Clear all template placeholder highlights in BUFFER."
+  (with-current-buffer buffer
+    (remove-overlays (point-min) (point-max) 'aidermacs-template-highlight t)))
+
+(defun aidermacs-templates--collect-placeholder-values-interactive (placeholders template-text)
+  "Collect user input for PLACEHOLDERS while displaying TEMPLATE-TEXT in a buffer.
+Returns an alist of (placeholder . value) pairs.
+The template buffer is displayed and updated in real-time as placeholders are filled."
+  (let* ((buffer-name "*Aidermacs Template*")
+         (buffer (get-buffer-create buffer-name))
+         (replacements '()))
+    (with-current-buffer buffer
+      (erase-buffer)
+      (insert template-text)
+      (goto-char (point-min))
+      (setq buffer-read-only t))
+
+    ;; Display the buffer
+    (display-buffer buffer '((display-buffer-reuse-window display-buffer-pop-up-window)))
+
+    ;; Collect values for each placeholder
+    (unwind-protect
+        (dolist (placeholder placeholders)
+          (let ((value (read-string (format "%s: " placeholder))))
+            (push (cons placeholder value) replacements)
+            ;; Update the buffer with the filled value
+            (with-current-buffer buffer
+              (let ((inhibit-read-only t))
+                (save-excursion
+                  (goto-char (point-min))
+                  (while (re-search-forward
+                          (regexp-quote (format "{%s}" placeholder)) nil t)
+                    (replace-match value t t)))
+                ;; Highlight the newly filled placeholder
+                (aidermacs-templates--highlight-filled-placeholders buffer (list (cons placeholder value)))))))
+      ;; Don't kill the buffer here - we'll use it for editing
+      nil)
+    (nreverse replacements)))
+
+(defun aidermacs-templates--setup-edit-mode (buffer template-text replacements callback)
+  "Setup BUFFER for template editing with keybindings.
+TEMPLATE-TEXT is the original template, REPLACEMENTS are the filled values,
+and CALLBACK is called when the user confirms with C-c C-c."
+  (with-current-buffer buffer
+    (setq aidermacs-templates--edit-buffer-template-text template-text)
+    (setq aidermacs-templates--edit-buffer-replacements replacements)
+    (setq aidermacs-templates--edit-buffer-callback callback)
+    (setq buffer-read-only nil)
+    ;; Create a new keymap if none exists, otherwise copy the current one
+    (let ((keymap (if (current-local-map)
+                      (copy-keymap (current-local-map))
+                    (make-sparse-keymap))))
+      (use-local-map keymap))
+    (local-set-key (kbd "C-c C-c") #'aidermacs-templates-confirm-and-use)
+    (local-set-key (kbd "C-c C-k") #'aidermacs-templates-cancel)
+    (local-set-key (kbd "C-c C-n") #'aidermacs-templates-save-as-new)
+    (goto-char (point-min))
+    (message "Edit template: C-c C-c to use, C-c C-k to cancel, C-c C-n to save as new")))
+
+(defun aidermacs-templates-confirm-and-use ()
+  "Confirm the template and send it to aidermacs."
+  (interactive)
+  (when aidermacs-templates--edit-buffer-callback
+    (let ((content (buffer-string)))
+      (aidermacs-templates--clear-highlights (current-buffer))
+      (funcall aidermacs-templates--edit-buffer-callback content)
+      (kill-buffer (current-buffer)))))
+
+(defun aidermacs-templates-cancel ()
+  "Cancel template editing and close the buffer."
+  (interactive)
+  (when (yes-or-no-p "Cancel template editing? ")
+    (aidermacs-templates--clear-highlights (current-buffer))
+    (kill-buffer (current-buffer))
+    (message "Template editing cancelled")))
+
+(defun aidermacs-templates-save-as-new ()
+  "Save the current template as a new template file."
+  (interactive)
+  (aidermacs-templates--ensure-directory)
+  (let* ((name (read-string "New template name: "))
+         (extension (if (= 1 (length aidermacs-templates-file-extension))
+                        (car aidermacs-templates-file-extension)
+                      (completing-read "Select file extension: "
+                                       aidermacs-templates-file-extension
+                                       nil t (car aidermacs-templates-file-extension))))
+         (base-path (expand-file-name
+                     (concat name extension)
+                     aidermacs-user-templates-directory))
+         ;; Use make-temp-name style collision detection
+         (file-path (if (file-exists-p base-path)
+                        (let ((counter 1))
+                          (while (file-exists-p
+                                  (expand-file-name
+                                   (format "%s-%d%s" name counter extension)
+                                   aidermacs-user-templates-directory))
+                            (setq counter (1+ counter)))
+                          (expand-file-name
+                           (format "%s-%d%s" name counter extension)
+                           aidermacs-user-templates-directory))
+                      base-path))
+         (content (buffer-string)))
+    (when (and name (not (string-empty-p name)))
+      (with-temp-file file-path
+        (insert content))
+      (message "Template saved as '%s' at %s" (file-name-base file-path) file-path)
+      (aidermacs-templates--clear-highlights (current-buffer))
+      (kill-buffer (current-buffer)))))
+
+;;;###autoload
 (defun aidermacs-use-template ()
   "Select and use a prompt template.
 Prompts for template selection, processes placeholders, and sends
 the resulting command to aidermacs.
 
 If the template has metadata with a 'command' field, that command
-will be executed first (blocking) before sending the template content."
+will be executed first (blocking) before sending the template content.
+
+The template is displayed in a buffer during placeholder collection,
+with filled placeholders highlighted. After all placeholders are filled,
+the user can edit the template and use C-c C-c to send it, C-c C-k to
+cancel, or C-c C-n to save it as a new template."
   (interactive)
   (let* ((templates (aidermacs-templates--list-templates)))
     (if (null templates)
@@ -265,13 +411,36 @@ will be executed first (blocking) before sending the template content."
           (message "Executing template command: %s" command)
           (unless (aidermacs-templates--execute-command-blocking command)
             (error "Failed to execute template command: %s" command)))
-        ;; Process and send template content
-        (let ((processed-text (aidermacs-templates--process-template content)))
-          (when (and processed-text (not (string-empty-p (string-trim processed-text))))
-            ;; Use the existing aidermacs command sending infrastructure
-            (if (fboundp 'aidermacs--send-command)
-                (aidermacs--send-command processed-text)
-              (error "aidermacs--send-command not available"))))))))
+        ;; Extract placeholders and collect values interactively
+        (let* ((placeholders (aidermacs-templates--extract-placeholders content))
+               (buffer-name "*Aidermacs Template*")
+               (buffer (get-buffer-create buffer-name)))
+          (if (null placeholders)
+              ;; No placeholders - just display and allow editing
+              (progn
+                (with-current-buffer buffer
+                  (erase-buffer)
+                  (insert content)
+                  (goto-char (point-min)))
+                (display-buffer buffer '((display-buffer-reuse-window display-buffer-pop-up-window)))
+                (aidermacs-templates--setup-edit-mode
+                 buffer content '()
+                 (lambda (processed-text)
+                   (when (and processed-text (not (string-empty-p (string-trim processed-text))))
+                     (if (fboundp 'aidermacs--send-command)
+                         (aidermacs--send-command processed-text)
+                       (error "aidermacs--send-command not available"))))))
+            ;; Has placeholders - collect values interactively
+            (let ((replacements (aidermacs-templates--collect-placeholder-values-interactive
+                                placeholders content)))
+              ;; Setup edit mode with callback to send the final text
+              (aidermacs-templates--setup-edit-mode
+               buffer content replacements
+               (lambda (processed-text)
+                 (when (and processed-text (not (string-empty-p (string-trim processed-text))))
+                   (if (fboundp 'aidermacs--send-command)
+                       (aidermacs--send-command processed-text)
+                     (error "aidermacs--send-command not available"))))))))))))
 
 ;;;###autoload
 (defun aidermacs-create-template ()

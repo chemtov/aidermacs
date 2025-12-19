@@ -9,7 +9,11 @@ The Aidermacs template system allows you to create reusable prompt templates wit
 - **Simple Text Files**: Templates are stored as plain text files in a configurable directory
 - **Placeholder Support**: Use `{Placeholder-Text}` syntax for dynamic inputs
 - **Multiple Placeholders**: Each template can have multiple placeholders
-- **Interactive Replacement**: Placeholders are replaced via `completing-read` prompts
+- **Interactive Replacement**: Placeholders are replaced via `completing-read` prompts with live preview
+- **Live Template Preview**: Template is displayed in a buffer during placeholder collection
+- **Real-time Highlighting**: Filled placeholders are highlighted as you answer questions
+- **Interactive Editing**: After filling placeholders, edit the template before sending
+- **Flexible Actions**: Use C-c C-c to send, C-c C-k to cancel, or C-c C-n to save as new template
 - **Full Integration**: Works seamlessly with aidermacs command sending infrastructure
 
 ## Installation and Configuration
@@ -53,6 +57,23 @@ Aidermacs searches for templates in two locations:
 2.  **User Templates**: Your personal templates are stored in `~/.emacs.d/aidermacs-templates/` by default. This is the place to create, edit, and manage your own templates. If a user template has the same name as a default template, the user's version will be used.
 
 ### Configuration Options
+
+
+#### Customizing Highlight Face
+
+You can customize the face used to highlight filled placeholders:
+
+```emacs-lisp
+;; Use a custom face for highlighting
+(setq aidermacs-templates-filled-placeholder-face 'region)
+
+;; Or define your own face
+(defface my-template-highlight
+  '((t :background "yellow" :foreground "black"))
+  "Face for highlighting filled template placeholders.")
+
+(setq aidermacs-templates-filled-placeholder-face 'my-template-highlight)
+```
 
 You can customize the template system using these variables:
 
@@ -111,8 +132,13 @@ Create a `.txt` or `.md` file in your templates directory:
 
 1. Press `P` in the aidermacs transient menu (or `M-x aidermacs-use-template`)
 2. Select a template from the list
-3. Fill in each placeholder when prompted
-4. The processed template is automatically sent to aidermacs
+3. The template is displayed in a buffer for context
+4. Fill in each placeholder when prompted - the template updates in real-time with highlighting
+5. After all placeholders are filled, you can:
+   - **Edit the template** - Make any final adjustments
+   - **C-c C-c** - Confirm and send the template to aidermacs
+   - **C-c C-k** - Cancel and close the template buffer
+   - **C-c C-n** - Save the edited template as a new template file
 
 ### Managing Templates
 

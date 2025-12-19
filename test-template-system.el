@@ -459,6 +459,196 @@ Content"))
           (cl-assert (member "backtrace-test" (mapcar #'car templates)))))
     (delete-directory temp-dir t)))
 
+;; --- Interactive Template Editing Tests ---
+
+;; Test 29: Highlight filled placeholders
+(let ((temp-dir (make-temp-file "aidermacs-highlight-test-" t)))
+  (unwind-protect
+      (let ((buffer (get-buffer-create "*Test Highlight*")))
+        (with-current-buffer buffer
+          (erase-buffer)
+          (insert "Hello Alice, you are 30 years old"))
+        (let ((replacements '(("Name" . "Alice") ("Age" . "30"))))
+          (aidermacs-templates--highlight-filled-placeholders buffer replacements)
+          (with-current-buffer buffer
+            (goto-char (point-min))
+            (let ((overlays-found 0))
+              (while (< (point) (point-max))
+                (let ((ovs (overlays-at (point))))
+                  (dolist (ov ovs)
+                    (when (overlay-get ov 'aidermacs-template-highlight)
+                      (setq overlays-found (1+ overlays-found)))))
+                (forward-char 1))
+              (message "Test 29 - Highlight overlays found: %d" overlays-found)
+              (cl-assert (> overlays-found 0) nil "Should have at least one highlight overlay")))
+          (aidermacs-templates--clear-highlights buffer)
+          (with-current-buffer buffer
+            (let ((overlays-remaining 0))
+              (goto-char (point-min))
+              (while (< (point) (point-max))
+                (let ((ovs (overlays-at (point))))
+                  (dolist (ov ovs)
+                    (when (overlay-get ov 'aidermacs-template-highlight)
+                      (setq overlays-remaining (1+ overlays-remaining)))))
+                (forward-char 1))
+              (message "Test 29 - Overlays after clear: %d" overlays-remaining)
+              (cl-assert (= overlays-remaining 0) nil "All highlights should be cleared"))))
+        (kill-buffer buffer))
+    (delete-directory temp-dir t)))
+
+;; Test 30: Interactive placeholder collection (simulated)
+;; This test verifies the function structure without actual user interaction
+(let ((template "Hello {Name}, welcome to {Place}!")
+      (buffer-name "*Aidermacs Template*"))
+  ;; Clean up any existing buffer
+  (when (get-buffer buffer-name)
+    (kill-buffer buffer-name))
+  ;; Mock read-string to provide automatic answers
+  (cl-letf (((symbol-function 'read-string)
+             (let ((answers '("Alice" "Wonderland"))
+                   (index 0))
+               (lambda (prompt)
+                 (let ((answer (nth index answers)))
+                   (setq index (1+ index))
+                   answer)))))
+    (let* ((placeholders '("Name" "Place"))
+           (replacements (aidermacs-templates--collect-placeholder-values-interactive
+                         placeholders template)))
+      (message "Test 30 - Interactive replacements: %s" replacements)
+      (cl-assert (equal replacements '(("Name" . "Alice") ("Place" . "Wonderland")))
+                 nil "Should collect placeholder values correctly")
+      ;; Verify buffer was created and contains updated content
+      (let ((buffer (get-buffer buffer-name)))
+        (cl-assert buffer nil "Template buffer should exist")
+        (with-current-buffer buffer
+          (let ((content (buffer-string)))
+            (message "Test 30 - Buffer content: %s" content)
+            (cl-assert (string-match-p "Alice" content)
+                       nil "Buffer should contain filled value 'Alice'")
+            (cl-assert (string-match-p "Wonderland" content)
+                       nil "Buffer should contain filled value 'Wonderland'")
+            (cl-assert (not (string-match-p "{Name}" content))
+                       nil "Buffer should not contain unfilled placeholder {Name}")
+            (cl-assert (not (string-match-p "{Place}" content))
+                       nil "Buffer should not contain unfilled placeholder {Place}")))
+        (kill-buffer buffer)))))
+
+;; Test 31: Setup edit mode with keybindings
+(let ((buffer (get-buffer-create "*Test Edit Mode*"))
+      (template-text "Test template")
+      (replacements '(("Test" . "Value")))
+      (callback-called nil))
+  (with-current-buffer buffer
+    (erase-buffer)
+    (insert "Test content"))
+  (aidermacs-templates--setup-edit-mode
+   buffer template-text replacements
+   (lambda (text) (setq callback-called t)))
+  (with-current-buffer buffer
+    (message "Test 31 - Edit mode setup")
+    (cl-assert (not buffer-read-only) nil "Buffer should be editable")
+    (cl-assert (equal aidermacs-templates--edit-buffer-template-text template-text)
+               nil "Template text should be stored")
+    (cl-assert (equal aidermacs-templates--edit-buffer-replacements replacements)
+               nil "Replacements should be stored")
+    (cl-assert aidermacs-templates--edit-buffer-callback
+               nil "Callback should be stored")
+    ;; Verify keybindings are set
+    (cl-assert (keymapp (current-local-map))
+               nil "Local keymap should be set")
+    (let ((c-c-c-c-binding (lookup-key (current-local-map) (kbd "C-c C-c")))
+          (c-c-c-k-binding (lookup-key (current-local-map) (kbd "C-c C-k")))
+          (c-c-c-n-binding (lookup-key (current-local-map) (kbd "C-c C-n"))))
+      (message "Test 31 - C-c C-c binding: %s" c-c-c-c-binding)
+      (message "Test 31 - C-c C-k binding: %s" c-c-c-k-binding)
+      (message "Test 31 - C-c C-n binding: %s" c-c-c-n-binding)
+      (cl-assert (eq c-c-c-c-binding 'aidermacs-templates-confirm-and-use)
+                 nil "C-c C-c should be bound to confirm-and-use")
+      (cl-assert (eq c-c-c-k-binding 'aidermacs-templates-cancel)
+                 nil "C-c C-k should be bound to cancel")
+      (cl-assert (eq c-c-c-n-binding 'aidermacs-templates-save-as-new)
+                 nil "C-c C-n should be bound to save-as-new")))
+  (kill-buffer buffer))
+
+;; Test 32: Confirm and use callback
+(let ((buffer (get-buffer-create "*Test Callback*"))
+      (callback-result nil))
+  (with-current-buffer buffer
+    (erase-buffer)
+    (insert "Final template content")
+    (setq aidermacs-templates--edit-buffer-callback
+          (lambda (text) (setq callback-result text))))
+  ;; Mock yes-or-no-p to avoid interactive prompts
+  (cl-letf (((symbol-function 'yes-or-no-p) (lambda (_) t)))
+    (with-current-buffer buffer
+      (aidermacs-templates-confirm-and-use))
+    (message "Test 32 - Callback result: %s" callback-result)
+    (cl-assert (equal callback-result "Final template content")
+               nil "Callback should receive buffer content")
+    (cl-assert (not (get-buffer "*Test Callback*"))
+               nil "Buffer should be killed after confirmation")))
+
+;; Test 33: Cancel template editing
+(let ((buffer (get-buffer-create "*Test Cancel*")))
+  (with-current-buffer buffer
+    (erase-buffer)
+    (insert "Content to cancel")
+    (setq aidermacs-templates--edit-buffer-callback
+          (lambda (text) (error "Callback should not be called"))))
+  ;; Mock yes-or-no-p to confirm cancellation
+  (cl-letf (((symbol-function 'yes-or-no-p) (lambda (_) t)))
+    (with-current-buffer buffer
+      (aidermacs-templates-cancel))
+    (message "Test 33 - Cancel completed")
+    (cl-assert (not (get-buffer "*Test Cancel*"))
+               nil "Buffer should be killed after cancellation")))
+
+;; Test 34: Save as new template with collision detection
+(let ((temp-dir (make-temp-file "aidermacs-save-test-" t)))
+  (unwind-protect
+      (let ((aidermacs-user-templates-directory temp-dir)
+            (aidermacs-templates-file-extension '(".txt"))
+            (buffer (get-buffer-create "*Test Save*")))
+        ;; Create an existing template to test collision detection
+        (with-temp-file (expand-file-name "existing.txt" temp-dir)
+          (insert "existing content"))
+        (with-current-buffer buffer
+          (erase-buffer)
+          (insert "New template content"))
+        ;; Mock read-string to provide template name
+        (cl-letf (((symbol-function 'read-string)
+                   (lambda (prompt) "existing"))
+                  ((symbol-function 'completing-read)
+                   (lambda (&rest _) ".txt")))
+          (with-current-buffer buffer
+            (aidermacs-templates-save-as-new))
+          ;; Verify the new file was created with collision suffix
+          (let ((files (directory-files temp-dir nil "^existing.*\\.txt$")))
+            (message "Test 34 - Files created: %s" files)
+            (cl-assert (member "existing.txt" files)
+                       nil "Original file should still exist")
+            (cl-assert (member "existing-1.txt" files)
+                       nil "New file with collision suffix should be created")
+            ;; Verify content
+            (let ((new-content (with-temp-buffer
+                                (insert-file-contents (expand-file-name "existing-1.txt" temp-dir))
+                                (buffer-string))))
+              (cl-assert (equal new-content "New template content")
+                         nil "New file should have correct content"))))
+        (when (get-buffer "*Test Save*")
+          (kill-buffer "*Test Save*")))
+    (delete-directory temp-dir t)))
+
+;; Test 35: Template with no placeholders - should still show edit buffer
+(let ((template "Simple template with no placeholders")
+      (buffer-name "*Aidermacs Template*"))
+  (when (get-buffer buffer-name)
+    (kill-buffer buffer-name))
+  (let* ((placeholders (aidermacs-templates--extract-placeholders template)))
+    (message "Test 35 - Placeholders in simple template: %s" placeholders)
+    (cl-assert (null placeholders)
+               nil "Simple template should have no placeholders")))
+
 (message "All tests passed!")
 
 (provide 'test-template-system)
