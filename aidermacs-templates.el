@@ -47,9 +47,15 @@ This is the primary location for creating and managing personal templates."
 Matches text in the format {Prompt-Text}.")
 
 (defun aidermacs-templates--get-default-directory ()
-  "Return the directory where default templates are stored with the package."
-  (let ((el-file-dir (file-name-directory (or load-file-name (buffer-file-name)))))
-    (expand-file-name "templates" el-file-dir)))
+  "Return the directory where default templates are stored with the package.
+Returns nil if the templates directory cannot be located."
+  (let* ((source-file (or load-file-name
+                          (buffer-file-name)
+                          ;; Try to locate the library if loaded from compiled code
+                          (locate-library "aidermacs-templates")))
+         (el-file-dir (when source-file (file-name-directory source-file))))
+    (when el-file-dir
+      (expand-file-name "templates" el-file-dir))))
 
 (defun aidermacs-templates--ensure-directory ()
   "Ensure the user templates directory exists, creating it if necessary."

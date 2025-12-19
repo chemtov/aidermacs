@@ -40,13 +40,14 @@
     (cl-assert (equal placeholders '("Enter-URL" "What-to-do-with-it")))))
 
 ;; --- Filesystem tests ---
-(let ((temp-dir (make-temp-directory "aidermacs-templates-test-")))
+(let ((temp-dir (make-temp-file "aidermacs-templates-test-" t)))
   (unwind-protect
       (let ((aidermacs-user-templates-directory temp-dir)
             (aidermacs-templates-file-extension '(".txt" ".md")))
-        (flet ((aidermacs-templates--get-default-directory ()
-                 ;; Return a non-existent dir to isolate user templates
-                 (expand-file-name "non-existent" temp-dir)))
+        (cl-letf (((symbol-function 'aidermacs-templates--get-default-directory)
+                   (lambda ()
+                     ;; Return a non-existent dir to isolate user templates
+                     (expand-file-name "non-existent" temp-dir))))
 
           ;; Test 6: List templates from user directory
           (with-temp-file (expand-file-name "test1.txt" temp-dir)
@@ -69,6 +70,55 @@
               (cl-assert (equal content "Hello template"))))))
     (delete-directory temp-dir t)))
 
+;; Test 8: Handle nil directory gracefully
+(let ((result (aidermacs-templates--list-templates-from-dir nil)))
+  (message "Test 8 - Nil directory: %s" result)
+  (cl-assert (null result)))
+
+;; Test 9: Handle non-existent directory gracefully
+(let ((result (aidermacs-templates--list-templates-from-dir "/non/existent/path")))
+  (message "Test 9 - Non-existent directory: %s" result)
+  (cl-assert (null result)))
+
+;; Test 10: get-default-directory returns nil when library not found
+(let ((result (aidermacs-templates--get-default-directory)))
+  (message "Test 10 - Get default directory: %s" (if result "found" "nil"))
+  ;; This should either return a valid directory or nil, not crash
+  (cl-assert (or (null result) (stringp result))))
+
+;; Test 11: list-templates works even when default directory is nil
+(let ((temp-dir (make-temp-file "aidermacs-templates-test-" t))
+      (aidermacs-user-templates-directory nil))
+  (unwind-protect
+      (let ((aidermacs-user-templates-directory temp-dir))
+        ;; Create a test template
+        (with-temp-file (expand-file-name "test.txt" temp-dir)
+          (insert "test content"))
+        ;; Mock get-default-directory to return nil
+        (cl-letf (((symbol-function 'aidermacs-templates--get-default-directory)
+                   (lambda () nil)))
+          (let ((templates (aidermacs-templates--list-templates)))
+            (message "Test 11 - List templates with nil default dir: %s" (mapcar #'car templates))
+            (cl-assert (= 1 (length templates)))
+            (cl-assert (equal "test" (caar templates))))))
+    (delete-directory temp-dir t)))
+
+;; Test 12: Simulate the exact error condition from backtrace
+;; (calling from a buffer with no file-name and no load-file-name)
+(let ((temp-dir (make-temp-file "aidermacs-templates-test-" t)))
+  (unwind-protect
+      (let ((aidermacs-user-templates-directory temp-dir)
+            (load-file-name nil)
+            (buffer-file-name nil))
+        ;; Create a test template
+        (with-temp-file (expand-file-name "backtrace-test.txt" temp-dir)
+          (insert "/ask {Question}"))
+        ;; This should not crash even when both load-file-name and buffer-file-name are nil
+        (let ((templates (aidermacs-templates--list-templates)))
+          (message "Test 12 - Backtrace scenario: %s" (mapcar #'car templates))
+          (cl-assert (>= (length templates) 1))
+          (cl-assert (member "backtrace-test" (mapcar #'car templates)))))
+    (delete-directory temp-dir t)))
 
 (message "All tests passed!")
 
