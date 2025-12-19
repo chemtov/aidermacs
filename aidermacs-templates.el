@@ -79,7 +79,7 @@ Returns an alist of (display-name . file-path) pairs."
          (default-templates (aidermacs-templates--list-templates-from-dir default-dir))
          (user-templates (aidermacs-templates--list-templates-from-dir user-dir))
          ;; User templates come first to take precedence
-         (merged (cl-delete-duplicates (append user-templates default-templates)
+         (merged (cl-remove-duplicates (append user-templates default-templates)
                                        :key #'car :test #'string=)))
     merged))
 
@@ -173,7 +173,7 @@ Prompts for template name and content, then saves it to the templates directory.
   (interactive)
   (let* ((templates (aidermacs-templates--list-templates)))
     (if (null templates)
-        (message "No templates found in %s" aidermacs-templates-directory)
+        (message "No templates found in default or user template directories.")
       (let* ((template-name (completing-read "Select template to edit: "
                                             (mapcar #'car templates)
                                             nil t))
@@ -186,7 +186,7 @@ Prompts for template name and content, then saves it to the templates directory.
   (interactive)
   (let* ((templates (aidermacs-templates--list-templates)))
     (if (null templates)
-        (message "No templates found in %s" aidermacs-templates-directory)
+        (message "No templates found in default or user template directories.")
       (let* ((template-name (completing-read "Select template to delete: "
                                             (mapcar #'car templates)
                                             nil t))
