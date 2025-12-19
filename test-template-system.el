@@ -462,6 +462,40 @@ Content"))
 ;; --- Interactive Template Editing Tests ---
 
 ;; Test 29: Highlight filled placeholders
+
+
+;; Test 29a: Highlight current placeholder being asked
+(let ((buffer (get-buffer-create "*Test Current Highlight*")))
+  (with-current-buffer buffer
+    (erase-buffer)
+    (insert "Hello {Name}, you are {Age} years old"))
+  ;; Highlight the current placeholder
+  (aidermacs-templates--highlight-current-placeholder buffer "Name")
+  (with-current-buffer buffer
+    (goto-char (point-min))
+    (let ((current-overlays-found 0))
+      (while (< (point) (point-max))
+        (let ((ovs (overlays-at (point))))
+          (dolist (ov ovs)
+            (when (overlay-get ov 'aidermacs-template-current-highlight)
+              (setq current-overlays-found (1+ current-overlays-found)))))
+        (forward-char 1))
+      (message "Test 29a - Current highlight overlays found: %d" current-overlays-found)
+      (cl-assert (> current-overlays-found 0) nil "Should have at least one current highlight overlay")))
+  ;; Clear current highlights
+  (aidermacs-templates--clear-current-highlights buffer)
+  (with-current-buffer buffer
+    (let ((overlays-remaining 0))
+      (goto-char (point-min))
+      (while (< (point) (point-max))
+        (let ((ovs (overlays-at (point))))
+          (dolist (ov ovs)
+            (when (overlay-get ov 'aidermacs-template-current-highlight)
+              (setq overlays-remaining (1+ overlays-remaining)))))
+        (forward-char 1))
+      (message "Test 29a - Current overlays after clear: %d" overlays-remaining)
+      (cl-assert (= overlays-remaining 0) nil "All current highlights should be cleared")))
+  (kill-buffer buffer))
 (let ((temp-dir (make-temp-file "aidermacs-highlight-test-" t)))
   (unwind-protect
       (let ((buffer (get-buffer-create "*Test Highlight*")))

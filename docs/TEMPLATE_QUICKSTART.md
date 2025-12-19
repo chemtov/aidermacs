@@ -7,7 +7,7 @@
 2. Press `P` (Use Template)
 3. Select a template
 4. **See live preview** - Template appears in a buffer
-5. **Fill in the prompts** - Watch placeholders get highlighted in real-time
+5. **Fill in the prompts** - Current question is highlighted, then filled placeholders are highlighted as you answer
 6. **Edit if needed** - Make final adjustments
 7. **Press C-c C-c** to send, C-c C-k to cancel, or C-c C-n to save as new
 8. Done!

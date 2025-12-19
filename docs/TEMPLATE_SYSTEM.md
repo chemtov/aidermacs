@@ -12,6 +12,7 @@ The Aidermacs template system allows you to create reusable prompt templates wit
 - **Interactive Replacement**: Placeholders are replaced via `completing-read` prompts with live preview
 - **Live Template Preview**: Template is displayed in a buffer during placeholder collection
 - **Real-time Highlighting**: Filled placeholders are highlighted as you answer questions
+- **Current Question Highlighting**: The placeholder being asked is highlighted differently to show which question you're answering
 - **Smart Mode Detection**: Preview buffer automatically uses the correct major mode (text-mode for .txt, markdown-mode for .md, org-mode for .org)
 - **Interactive Editing**: After filling placeholders, edit the template before sending
 - **Flexible Actions**: Use C-c C-c to send, C-c C-k to cancel, or C-c C-n to save as new template
@@ -74,6 +75,13 @@ You can customize the face used to highlight filled placeholders:
   "Face for highlighting filled template placeholders.")
 
 (setq aidermacs-templates-filled-placeholder-face 'my-template-highlight)
+
+
+;; Customize the current question highlight face
+;; By default, it inherits from 'warning with underline
+(custom-set-faces
+ '(aidermacs-templates-current-placeholder-face
+   ((t :background "orange" :foreground "black" :weight bold))))
 ```
 
 You can customize the template system using these variables:

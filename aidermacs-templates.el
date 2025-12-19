@@ -46,6 +46,11 @@ This is the primary location for creating and managing personal templates."
   :type 'face
   :group 'aidermacs-templates)
 
+(defface aidermacs-templates-current-placeholder-face
+  '((t :inherit warning :underline t))
+  "Face used to highlight the current placeholder being asked in template editing buffer."
+  :group 'aidermacs-templates)
+
 (defvar aidermacs-templates--placeholder-regexp
   "{\\([^}]+\\)}"
   "Regular expression to match template placeholders.
@@ -264,6 +269,23 @@ REPLACEMENTS is an alist of (placeholder . value) pairs."
   (with-current-buffer buffer
     (remove-overlays (point-min) (point-max) 'aidermacs-template-highlight t)))
 
+(defun aidermacs-templates--highlight-current-placeholder (buffer placeholder)
+  "Highlight the current PLACEHOLDER being asked in BUFFER.
+Uses a different face than filled placeholders to distinguish the current question."
+  (with-current-buffer buffer
+    (save-excursion
+      (goto-char (point-min))
+      (let ((pattern (regexp-quote (format "{%s}" placeholder))))
+        (while (re-search-forward pattern nil t)
+          (let ((overlay (make-overlay (match-beginning 0) (match-end 0))))
+            (overlay-put overlay 'face 'aidermacs-templates-current-placeholder-face)
+            (overlay-put overlay 'aidermacs-template-current-highlight t)))))))
+
+(defun aidermacs-templates--clear-current-highlights (buffer)
+  "Clear current placeholder highlights in BUFFER."
+  (with-current-buffer buffer
+    (remove-overlays (point-min) (point-max) 'aidermacs-template-current-highlight t)))
+
 (defun aidermacs-templates--collect-placeholder-values-interactive (placeholders template-text &optional template-file)
   "Collect user input for PLACEHOLDERS while displaying TEMPLATE-TEXT in a buffer.
 Returns an alist of (placeholder . value) pairs.
@@ -292,8 +314,12 @@ If TEMPLATE-FILE is provided, the buffer's major mode is set based on the file e
     ;; Collect values for each placeholder
     (unwind-protect
         (dolist (placeholder placeholders)
+          ;; Highlight the current placeholder being asked
+          (aidermacs-templates--highlight-current-placeholder buffer placeholder)
           (let ((value (read-string (format "%s: " placeholder))))
             (push (cons placeholder value) replacements)
+            ;; Clear the current placeholder highlight
+            (aidermacs-templates--clear-current-highlights buffer)
             ;; Update the buffer with the filled value
             (with-current-buffer buffer
               (let ((inhibit-read-only t))
