@@ -14,27 +14,68 @@ The Aidermacs template system allows you to create reusable prompt templates wit
 
 ## Installation and Configuration
 
-The template system is automatically loaded with aidermacs. No special setup is needed.
+### Installing with use-package and straight.el
+
+If you're using `straight.el`, here's the recommended configuration:
+
+```emacs-lisp
+(use-package aidermacs
+  :straight (aidermacs 
+             :type git 
+             :host github 
+             :repo "MatthewZMD/aidermacs"
+             :files ("*.el" "templates/*.txt"))
+  :bind (("C-c a" . aidermacs-transient-menu))
+  :custom
+  ;; Customize user templates directory (optional)
+  (aidermacs-user-templates-directory 
+   (expand-file-name "my-aider-templates" user-emacs-directory))
+  ;; Customize template file extension (optional)
+  (aidermacs-templates-file-extension ".txt")
+  :config
+  ;; Set API keys
+  (setenv "ANTHROPIC_API_KEY" "sk-...")
+  ;; Other aidermacs configuration
+  (setq aidermacs-default-chat-mode 'architect)
+  (setq aidermacs-default-model "sonnet"))
+```
+
+**Important**: The `:files` specification ensures that:
+- All `.el` files are installed
+- The `templates/` directory with default templates is included
 
 ### Template Locations
 
 Aidermacs searches for templates in two locations:
 
-1.  **Default Templates**: A set of example templates is bundled with the aidermacs package. These are located in a `templates` subdirectory within the package installation directory. These files should not be edited directly as they may be overwritten during updates.
+1.  **Default Templates**: A set of example templates is bundled with the aidermacs package. These are located in a `templates/` subdirectory within the package installation directory. These files should not be edited directly as they may be overwritten during updates.
 
-2.  **User Templates**: Your personal templates are stored in `~/.emacs.d/aidermacs-templates/`. This is the place to create, edit, and manage your own templates. If a user template has the same name as a default template, the user's version will be used.
+2.  **User Templates**: Your personal templates are stored in `~/.emacs.d/aidermacs-templates/` by default. This is the place to create, edit, and manage your own templates. If a user template has the same name as a default template, the user's version will be used.
 
-### Example `use-package` setup
+### Configuration Options
 
-If you are using `use-package`, here is a sample configuration. This setup ensures that the bundled templates are correctly located.
+You can customize the template system using these variables:
+
+```emacs-lisp
+;; Change user templates directory
+(setq aidermacs-user-templates-directory "~/my-templates")
+
+;; Change template file extension
+(setq aidermacs-templates-file-extension ".template")
+```
+
+Or using `:custom` in `use-package`:
 
 ```emacs-lisp
 (use-package aidermacs
-  ;; Example for straight.el users:
-  ;; :straight (aidermacs :type git :host github :repo "MatthewZMD/aidermacs")
-  :config
-  ;; Your aidermacs configuration here
-  )
+  :straight (aidermacs 
+             :type git 
+             :host github 
+             :repo "MatthewZMD/aidermacs"
+             :files ("*.el" "templates/*.txt"))
+  :custom
+  (aidermacs-user-templates-directory "~/my-aider-templates")
+  (aidermacs-templates-file-extension ".template"))
 ```
 
 ## Usage
@@ -298,7 +339,7 @@ In the aidermacs transient menu:
 
 ### Variables
 
-- `aidermacs-templates-directory` - Directory for template files
+- `aidermacs-user-templates-directory` - Directory for user-created template files
 - `aidermacs-templates-file-extension` - File extension for templates (default: ".txt")
 
 ## Contributing Templates
