@@ -59,18 +59,24 @@ Matches text in the format {Prompt-Text}.")
 (defun aidermacs-templates--list-templates-from-dir (dir)
   "Return a list of templates from DIR.
 Returns an alist of (display-name . file-path) pairs."
-  (when (file-directory-p dir)
-    (let* ((regexp (concat "\\("
+  (when (and dir (file-directory-p dir))
+    (let* ((extensions (if (listp aidermacs-templates-file-extension)
+                           aidermacs-templates-file-extension
+                         (list aidermacs-templates-file-extension)))
+           (regexp (concat "\\("
                            (mapconcat (lambda (ext) (regexp-quote ext))
-                                      aidermacs-templates-file-extension
+                                      extensions
                                       "\\|")
                            "\\)$"))
+           ;; Get all files (not directories) in the directory
            (files (directory-files dir t regexp))
+           ;; Filter to only include regular files, not directories
+           (regular-files (cl-remove-if-not #'file-regular-p files))
            (templates (mapcar (lambda (file)
                                (cons (file-name-sans-extension
                                       (file-name-nondirectory file))
                                      file))
-                             files)))
+                             regular-files)))
       templates)))
 
 (defun aidermacs-templates--list-templates ()
