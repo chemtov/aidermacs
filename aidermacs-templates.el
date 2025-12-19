@@ -46,6 +46,12 @@ This is the primary location for creating and managing personal templates."
   "Regular expression to match template placeholders.
 Matches text in the format {Prompt-Text}.")
 
+(defvar aidermacs-templates--metadata-separator "---"
+  "Separator line that marks the end of template metadata header.")
+
+(defvar aidermacs-templates--metadata-fields '("title" "description" "command")
+  "List of supported metadata field names in template headers.")
+
 (defun aidermacs-templates--get-default-directory ()
   "Return the directory where default templates are stored with the package.
 Returns nil if the templates directory cannot be located or doesn't exist."
@@ -109,6 +115,68 @@ Returns an alist of (display-name . file-path) pairs."
     (insert-file-contents file-path)
     (buffer-string)))
 
+(defun aidermacs-templates--parse-metadata (template-text)
+  "Parse metadata header from TEMPLATE-TEXT.
+Returns a plist with :metadata (alist of field-value pairs) and :content (template body).
+If no metadata header is found, returns (:metadata nil :content TEMPLATE-TEXT)."
+  (let ((lines (split-string template-text "\n"))
+        (metadata-alist '())
+        (in-metadata t)
+        (content-lines '()))
+    (dolist (line lines)
+      (cond
+       ;; Found separator - switch to content mode
+       ((and in-metadata (string= (string-trim line) aidermacs-templates--metadata-separator))
+        (setq in-metadata nil))
+       ;; In metadata mode - parse field: value
+       (in-metadata
+        (when (string-match "^\\([a-zA-Z-]+\\):\\s-*\\(.+\\)$" line)
+          (let ((field (downcase (match-string 1 line)))
+                (value (string-trim (match-string 2 line))))
+            (when (member field aidermacs-templates--metadata-fields)
+              (push (cons field value) metadata-alist)))))
+       ;; In content mode - collect lines
+       (t
+        (push line content-lines))))
+    ;; Return parsed result
+    (list :metadata (nreverse metadata-alist)
+          :content (string-join (nreverse content-lines) "\n"))))
+
+(defun aidermacs-templates--get-metadata-field (metadata field)
+  "Get FIELD value from METADATA alist.
+Returns nil if field is not present."
+  (cdr (assoc field metadata)))
+
+(defun aidermacs-templates--execute-command-blocking (command)
+  "Execute COMMAND in aidermacs and wait for it to complete.
+Returns t on success, nil on failure or timeout."
+  (if (not (fboundp 'aidermacs--send-command))
+      (progn
+        (message "aidermacs--send-command not available")
+        nil)
+    (let ((success nil)
+          (timeout 30) ; 30 second timeout
+          (start-time (current-time)))
+      ;; Send command with a callback to set success flag
+      (aidermacs--send-command command nil t nil
+                               (lambda () (setq success t)))
+      ;; Wait for completion or timeout
+      (while (and (not success)
+                  (< (float-time (time-subtract (current-time) start-time)) timeout))
+        (accept-process-output nil 0.1))
+      success)))
+
+(defun aidermacs-templates--annotate (cand)
+  "Annotate template candidate CAND with its description for marginalia.
+This function is designed to work with marginalia-mode."
+  (when-let* ((templates (aidermacs-templates--list-templates))
+              (template-file (cdr (assoc cand templates)))
+              (template-text (aidermacs-templates--read-template template-file))
+              (parsed (aidermacs-templates--parse-metadata template-text))
+              (metadata (plist-get parsed :metadata))
+              (description (aidermacs-templates--get-metadata-field metadata "description")))
+    (concat " " (propertize description 'face 'marginalia-documentation))))
+
 (defun aidermacs-templates--extract-placeholders (template-text)
   "Extract all placeholders from TEMPLATE-TEXT.
 Returns a list of unique placeholder prompts in order of appearance."
@@ -154,22 +222,46 @@ Returns the processed template string ready to be sent as a command."
 (defun aidermacs-use-template ()
   "Select and use a prompt template.
 Prompts for template selection, processes placeholders, and sends
-the resulting command to aidermacs."
+the resulting command to aidermacs.
+
+If the template has metadata with a 'command' field, that command
+will be executed first (blocking) before sending the template content."
   (interactive)
   (let* ((templates (aidermacs-templates--list-templates)))
     (if (null templates)
         (message "No templates found in default or user template directories.")
-      (let* ((template-name (completing-read "Select template: "
-                                            (mapcar #'car templates)
+      ;; Set up marginalia annotation function
+      (let* ((marginalia-annotator-registry
+              (if (boundp 'marginalia-annotator-registry)
+                  (cons (cons 'aidermacs-template #'aidermacs-templates--annotate)
+                        marginalia-annotator-registry)
+                nil))
+             (template-name (completing-read "Select template: "
+                                            (lambda (string pred action)
+                                              (if (eq action 'metadata)
+                                                  '(metadata (category . aidermacs-template))
+                                                (complete-with-action action
+                                                                     (mapcar #'car templates)
+                                                                     string pred)))
                                             nil t))
              (template-file (cdr (assoc template-name templates)))
              (template-text (aidermacs-templates--read-template template-file))
-             (processed-text (aidermacs-templates--process-template template-text)))
-        (when (and processed-text (not (string-empty-p (string-trim processed-text))))
-          ;; Use the existing aidermacs command sending infrastructure
-          (if (fboundp 'aidermacs--send-command)
-              (aidermacs--send-command processed-text)
-            (error "aidermacs--send-command not available")))))))
+             (parsed (aidermacs-templates--parse-metadata template-text))
+             (metadata (plist-get parsed :metadata))
+             (content (plist-get parsed :content))
+             (command (aidermacs-templates--get-metadata-field metadata "command")))
+        ;; Execute command if specified
+        (when (and command (not (string-empty-p command)))
+          (message "Executing template command: %s" command)
+          (unless (aidermacs-templates--execute-command-blocking command)
+            (error "Failed to execute template command: %s" command)))
+        ;; Process and send template content
+        (let ((processed-text (aidermacs-templates--process-template content)))
+          (when (and processed-text (not (string-empty-p (string-trim processed-text))))
+            ;; Use the existing aidermacs command sending infrastructure
+            (if (fboundp 'aidermacs--send-command)
+                (aidermacs--send-command processed-text)
+              (error "aidermacs--send-command not available"))))))))
 
 ;;;###autoload
 (defun aidermacs-create-template ()

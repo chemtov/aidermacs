@@ -34,6 +34,135 @@
     (cl-assert (null placeholders))))
 
 ;; Test 5: Complex placeholder names
+
+
+;; --- Metadata Parsing Tests ---
+
+;; Test 18: Parse template with full metadata header
+(let ((template "title: Code Review Template
+description: Review code for quality and security issues
+command: /chat-mode architect
+---
+/ask Please review {File-Name}"))
+  (let ((parsed (aidermacs-templates--parse-metadata template)))
+    (let ((metadata (plist-get parsed :metadata))
+          (content (plist-get parsed :content)))
+      (message "Test 18 - Full metadata: metadata=%s content=%s" metadata content)
+      (cl-assert (equal (aidermacs-templates--get-metadata-field metadata "title")
+                        "Code Review Template"))
+      (cl-assert (equal (aidermacs-templates--get-metadata-field metadata "description")
+                        "Review code for quality and security issues"))
+      (cl-assert (equal (aidermacs-templates--get-metadata-field metadata "command")
+                        "/chat-mode architect"))
+      (cl-assert (string-match-p "/ask Please review {File-Name}" content)))))
+
+;; Test 19: Parse template with partial metadata (only description)
+(let ((template "description: A simple template
+---
+/code {Task}"))
+  (let ((parsed (aidermacs-templates--parse-metadata template)))
+    (let ((metadata (plist-get parsed :metadata))
+          (content (plist-get parsed :content)))
+      (message "Test 19 - Partial metadata: %s" metadata)
+      (cl-assert (equal (aidermacs-templates--get-metadata-field metadata "description")
+                        "A simple template"))
+      (cl-assert (null (aidermacs-templates--get-metadata-field metadata "title")))
+      (cl-assert (null (aidermacs-templates--get-metadata-field metadata "command")))
+      (cl-assert (string-match-p "/code {Task}" content)))))
+
+;; Test 20: Parse template with no metadata (backward compatibility)
+(let ((template "/ask {Question}"))
+  (let ((parsed (aidermacs-templates--parse-metadata template)))
+    (let ((metadata (plist-get parsed :metadata))
+          (content (plist-get parsed :content)))
+      (message "Test 20 - No metadata: metadata=%s content=%s" metadata content)
+      (cl-assert (null metadata))
+      (cl-assert (equal content "/ask {Question}")))))
+
+;; Test 21: Parse template with metadata but no content after separator
+(let ((template "title: Empty Template
+description: Has no content
+---"))
+  (let ((parsed (aidermacs-templates--parse-metadata template)))
+    (let ((metadata (plist-get parsed :metadata))
+          (content (plist-get parsed :content)))
+      (message "Test 21 - Empty content: metadata=%s content=%s" metadata content)
+      (cl-assert (equal (aidermacs-templates--get-metadata-field metadata "title")
+                        "Empty Template"))
+      (cl-assert (or (string-empty-p (string-trim content))
+                     (equal content ""))))))
+
+;; Test 22: Parse template with unknown metadata fields (should be ignored)
+(let ((template "title: Test
+unknown-field: Should be ignored
+description: Valid description
+another-unknown: Also ignored
+---
+Content here"))
+  (let ((parsed (aidermacs-templates--parse-metadata template)))
+    (let ((metadata (plist-get parsed :metadata)))
+      (message "Test 22 - Unknown fields: %s" metadata)
+      (cl-assert (equal (aidermacs-templates--get-metadata-field metadata "title") "Test"))
+      (cl-assert (equal (aidermacs-templates--get-metadata-field metadata "description")
+                        "Valid description"))
+      (cl-assert (null (aidermacs-templates--get-metadata-field metadata "unknown-field")))
+      (cl-assert (null (aidermacs-templates--get-metadata-field metadata "another-unknown"))))))
+
+;; Test 23: Parse template with multi-line content after separator
+(let ((template "description: Multi-line template
+---
+Line 1
+Line 2
+Line 3"))
+  (let ((parsed (aidermacs-templates--parse-metadata template)))
+    (let ((content (plist-get parsed :content)))
+      (message "Test 23 - Multi-line content: %s" content)
+      (cl-assert (string-match-p "Line 1" content))
+      (cl-assert (string-match-p "Line 2" content))
+      (cl-assert (string-match-p "Line 3" content)))))
+
+;; Test 24: Parse template with separator-like text in content (should not confuse parser)
+(let ((template "title: Test
+---
+This is content
+---
+More content with --- in it"))
+  (let ((parsed (aidermacs-templates--parse-metadata template)))
+    (let ((content (plist-get parsed :content)))
+      (message "Test 24 - Separator in content: %s" content)
+      ;; Content should include everything after first separator
+      (cl-assert (string-match-p "This is content" content))
+      (cl-assert (string-match-p "More content with --- in it" content)))))
+
+;; Test 25: Case insensitivity of metadata field names
+(let ((template "Title: Mixed Case Title
+DESCRIPTION: Uppercase description
+CoMmAnD: /help
+---
+Content"))
+  (let ((parsed (aidermacs-templates--parse-metadata template)))
+    (let ((metadata (plist-get parsed :metadata)))
+      (message "Test 25 - Case insensitive fields: %s" metadata)
+      (cl-assert (equal (aidermacs-templates--get-metadata-field metadata "title")
+                        "Mixed Case Title"))
+      (cl-assert (equal (aidermacs-templates--get-metadata-field metadata "description")
+                        "Uppercase description"))
+      (cl-assert (equal (aidermacs-templates--get-metadata-field metadata "command")
+                        "/help")))))
+
+;; Test 26: Whitespace handling in metadata values
+(let ((template "title:   Title with leading spaces   
+description:Trailing spaces   
+---
+Content"))
+  (let ((parsed (aidermacs-templates--parse-metadata template)))
+    (let ((metadata (plist-get parsed :metadata)))
+      (message "Test 26 - Whitespace handling: %s" metadata)
+      ;; Values should be trimmed
+      (cl-assert (equal (aidermacs-templates--get-metadata-field metadata "title")
+                        "Title with leading spaces"))
+      (cl-assert (equal (aidermacs-templates--get-metadata-field metadata "description")
+                        "Trailing spaces")))))
 (let ((template "URL: {Enter-URL}, Action: {What-to-do-with-it}"))
   (let ((placeholders (aidermacs-templates--extract-placeholders template)))
     (message "Test 5 - Complex names: %s" placeholders)
