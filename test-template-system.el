@@ -640,6 +640,67 @@ Content"))
     (delete-directory temp-dir t)))
 
 ;; Test 35: Template with no placeholders - should still show edit buffer
+
+
+;; Test 36: Major mode detection for template preview buffer
+(let ((temp-dir (make-temp-file "aidermacs-mode-test-" t)))
+  (unwind-protect
+      (progn
+        ;; Create templates with different extensions
+        (with-temp-file (expand-file-name "test-txt.txt" temp-dir)
+          (insert "Text template {Name}"))
+        (with-temp-file (expand-file-name "test-md.md" temp-dir)
+          (insert "# Markdown template {Name}"))
+        (with-temp-file (expand-file-name "test-org.org" temp-dir)
+          (insert "* Org template {Name}"))
+
+        ;; Test .txt file -> text-mode
+        (let ((buffer-name "*Aidermacs Template*"))
+          (when (get-buffer buffer-name)
+            (kill-buffer buffer-name))
+          (cl-letf (((symbol-function 'read-string)
+                     (lambda (prompt) "Alice")))
+            (let ((txt-file (expand-file-name "test-txt.txt" temp-dir)))
+              (aidermacs-templates--collect-placeholder-values-interactive
+               '("Name") "Text template {Name}" txt-file)
+              (with-current-buffer buffer-name
+                (message "Test 36a - .txt mode: %s" major-mode)
+                (cl-assert (eq major-mode 'text-mode)
+                           nil "Buffer should be in text-mode for .txt files"))
+              (kill-buffer buffer-name))))
+
+        ;; Test .md file -> markdown-mode (if available)
+        (when (fboundp 'markdown-mode)
+          (let ((buffer-name "*Aidermacs Template*"))
+            (when (get-buffer buffer-name)
+              (kill-buffer buffer-name))
+            (cl-letf (((symbol-function 'read-string)
+                       (lambda (prompt) "Bob")))
+              (let ((md-file (expand-file-name "test-md.md" temp-dir)))
+                (aidermacs-templates--collect-placeholder-values-interactive
+                 '("Name") "# Markdown template {Name}" md-file)
+                (with-current-buffer buffer-name
+                  (message "Test 36b - .md mode: %s" major-mode)
+                  (cl-assert (eq major-mode 'markdown-mode)
+                             nil "Buffer should be in markdown-mode for .md files"))
+                (kill-buffer buffer-name)))))
+
+        ;; Test .org file -> org-mode (if available)
+        (when (fboundp 'org-mode)
+          (let ((buffer-name "*Aidermacs Template*"))
+            (when (get-buffer buffer-name)
+              (kill-buffer buffer-name))
+            (cl-letf (((symbol-function 'read-string)
+                       (lambda (prompt) "Charlie")))
+              (let ((org-file (expand-file-name "test-org.org" temp-dir)))
+                (aidermacs-templates--collect-placeholder-values-interactive
+                 '("Name") "* Org template {Name}" org-file)
+                (with-current-buffer buffer-name
+                  (message "Test 36c - .org mode: %s" major-mode)
+                  (cl-assert (eq major-mode 'org-mode)
+                             nil "Buffer should be in org-mode for .org files"))
+                (kill-buffer buffer-name))))))
+    (delete-directory temp-dir t)))
 (let ((template "Simple template with no placeholders")
       (buffer-name "*Aidermacs Template*"))
   (when (get-buffer buffer-name)

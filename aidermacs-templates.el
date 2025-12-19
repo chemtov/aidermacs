@@ -264,16 +264,25 @@ REPLACEMENTS is an alist of (placeholder . value) pairs."
   (with-current-buffer buffer
     (remove-overlays (point-min) (point-max) 'aidermacs-template-highlight t)))
 
-(defun aidermacs-templates--collect-placeholder-values-interactive (placeholders template-text)
+(defun aidermacs-templates--collect-placeholder-values-interactive (placeholders template-text &optional template-file)
   "Collect user input for PLACEHOLDERS while displaying TEMPLATE-TEXT in a buffer.
 Returns an alist of (placeholder . value) pairs.
-The template buffer is displayed and updated in real-time as placeholders are filled."
+The template buffer is displayed and updated in real-time as placeholders are filled.
+If TEMPLATE-FILE is provided, the buffer's major mode is set based on the file extension."
   (let* ((buffer-name "*Aidermacs Template*")
          (buffer (get-buffer-create buffer-name))
          (replacements '()))
     (with-current-buffer buffer
       (erase-buffer)
       (insert template-text)
+      ;; Set major mode based on file extension
+      (when template-file
+        (let ((ext (file-name-extension template-file)))
+          (cond
+           ((string= ext "md") (when (fboundp 'markdown-mode) (markdown-mode)))
+           ((string= ext "org") (when (fboundp 'org-mode) (org-mode)))
+           ((string= ext "txt") (text-mode))
+           (t (text-mode)))))
       (goto-char (point-min))
       (setq buffer-read-only t))
 
@@ -432,7 +441,7 @@ cancel, or C-c C-n to save it as a new template."
                        (error "aidermacs--send-command not available"))))))
             ;; Has placeholders - collect values interactively
             (let ((replacements (aidermacs-templates--collect-placeholder-values-interactive
-                                placeholders content)))
+                                placeholders content template-file)))
               ;; Setup edit mode with callback to send the final text
               (aidermacs-templates--setup-edit-mode
                buffer content replacements

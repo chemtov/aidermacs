@@ -13,6 +13,7 @@ Added a comprehensive template system for creating reusable prompts with dynamic
 - Interactive placeholder replacement via `completing-read`
 - **Live template preview** - Template displayed in buffer during placeholder collection
 - **Real-time highlighting** - Filled placeholders highlighted as you answer questions
+- **Smart mode detection** - Preview buffer uses correct major mode based on file extension
 - **Interactive editing** - Edit template after filling placeholders before sending
 - **Flexible actions** - C-c C-c to send, C-c C-k to cancel, C-c C-n to save as new
 - Full integration with aidermacs command infrastructure

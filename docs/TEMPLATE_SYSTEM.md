@@ -12,6 +12,7 @@ The Aidermacs template system allows you to create reusable prompt templates wit
 - **Interactive Replacement**: Placeholders are replaced via `completing-read` prompts with live preview
 - **Live Template Preview**: Template is displayed in a buffer during placeholder collection
 - **Real-time Highlighting**: Filled placeholders are highlighted as you answer questions
+- **Smart Mode Detection**: Preview buffer automatically uses the correct major mode (text-mode for .txt, markdown-mode for .md, org-mode for .org)
 - **Interactive Editing**: After filling placeholders, edit the template before sending
 - **Flexible Actions**: Use C-c C-c to send, C-c C-k to cancel, or C-c C-n to save as new template
 - **Full Integration**: Works seamlessly with aidermacs command sending infrastructure
