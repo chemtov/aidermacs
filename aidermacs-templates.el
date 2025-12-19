@@ -122,25 +122,35 @@ If no metadata header is found, returns (:metadata nil :content TEMPLATE-TEXT)."
   (let ((lines (split-string template-text "\n"))
         (metadata-alist '())
         (in-metadata t)
+        (found-separator nil)
         (content-lines '()))
     (dolist (line lines)
       (cond
        ;; Found separator - switch to content mode
        ((and in-metadata (string= (string-trim line) aidermacs-templates--metadata-separator))
-        (setq in-metadata nil))
+        (setq in-metadata nil)
+        (setq found-separator t))
        ;; In metadata mode - parse field: value
        (in-metadata
-        (when (string-match "^\\([a-zA-Z-]+\\):\\s-*\\(.+\\)$" line)
-          (let ((field (downcase (match-string 1 line)))
-                (value (string-trim (match-string 2 line))))
-            (when (member field aidermacs-templates--metadata-fields)
-              (push (cons field value) metadata-alist)))))
+        (if (string-match "^\\([a-zA-Z-]+\\):\\s-*\\(.+\\)$" line)
+            (let ((field (downcase (match-string 1 line)))
+                  (value (string-trim (match-string 2 line))))
+              (when (member field aidermacs-templates--metadata-fields)
+                (push (cons field value) metadata-alist)))
+          ;; Line doesn't match metadata pattern - if we haven't found any metadata yet,
+          ;; this means there's no metadata header, so treat entire text as content
+          (unless metadata-alist
+            (setq in-metadata nil)
+            (push line content-lines))))
        ;; In content mode - collect lines
        (t
         (push line content-lines))))
     ;; Return parsed result
-    (list :metadata (nreverse metadata-alist)
-          :content (string-join (nreverse content-lines) "\n"))))
+    ;; If no separator was found and no metadata was parsed, return original text as content
+    (if (and (not found-separator) (null metadata-alist))
+        (list :metadata nil :content template-text)
+      (list :metadata (nreverse metadata-alist)
+            :content (string-join (nreverse content-lines) "\n")))))
 
 (defun aidermacs-templates--get-metadata-field (metadata field)
   "Get FIELD value from METADATA alist.
@@ -233,7 +243,7 @@ will be executed first (blocking) before sending the template content."
       ;; Set up marginalia annotation function
       (let* ((marginalia-annotator-registry
               (if (boundp 'marginalia-annotator-registry)
-                  (cons (cons 'aidermacs-template #'aidermacs-templates--annotate)
+                  (cons (list 'aidermacs-template #'aidermacs-templates--annotate)
                         marginalia-annotator-registry)
                 nil))
              (template-name (completing-read "Select template: "

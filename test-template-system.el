@@ -151,6 +151,56 @@ Content"))
                         "/help")))))
 
 ;; Test 26: Whitespace handling in metadata values
+
+
+;; Test 27: Marginalia annotator registry format (must be a list, not cons cell)
+;; This test reproduces the bug: (wrong-type-argument listp aidermacs-templates--annotate)
+(let ((test-passed nil))
+  (condition-case err
+      (progn
+        ;; Simulate what happens in aidermacs-use-template
+        ;; The bug was using (cons (cons 'category function) registry)
+        ;; which creates ((category . function) ...) - a cons cell
+        ;; But marginalia expects ((category function) ...) - a list
+
+        ;; Test the WRONG way (cons cell) - this should fail
+        (let* ((wrong-entry (cons 'test-category #'identity))
+               (wrong-registry (list wrong-entry)))
+          (message "Test 27 - Wrong format (cons cell): %S" wrong-entry)
+          (cl-assert (consp wrong-entry) nil "Entry should be a cons")
+          (cl-assert (not (listp (cdr wrong-entry))) nil "CDR should not be a list (it's a function)"))
+
+        ;; Test the RIGHT way (list) - this should work
+        (let* ((right-entry (list 'test-category #'identity))
+               (right-registry (list right-entry)))
+          (message "Test 27 - Right format (list): %S" right-entry)
+          (cl-assert (listp right-entry) nil "Entry should be a list")
+          (cl-assert (listp (cdr right-entry)) nil "CDR should be a list"))
+
+        (setq test-passed t))
+    (error
+     (message "Test 27 - Error: %S" err)
+     (setq test-passed nil)))
+  (cl-assert test-passed nil "Marginalia registry format test should pass"))
+
+;; Test 28: Verify annotator function returns proper format
+(let ((templates '(("test-template" . "/path/to/test.txt"))))
+  ;; Create a mock template file content with metadata
+  (let ((temp-file (make-temp-file "test-annotate-" nil ".txt")))
+    (unwind-protect
+        (progn
+          (with-temp-file temp-file
+            (insert "description: Test description for annotation\n---\nContent"))
+
+          ;; Mock the templates list to include our test file
+          (cl-letf (((symbol-function 'aidermacs-templates--list-templates)
+                     (lambda () (list (cons "test-template" temp-file)))))
+            (let ((annotation (aidermacs-templates--annotate "test-template")))
+              (message "Test 28 - Annotation result: %S" annotation)
+              (cl-assert (stringp annotation) nil "Annotation should be a string")
+              (cl-assert (string-match-p "Test description" annotation)
+                         nil "Annotation should contain the description"))))
+      (delete-file temp-file))))
 (let ((template "title:   Title with leading spaces   
 description:Trailing spaces   
 ---
