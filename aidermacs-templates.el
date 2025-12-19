@@ -222,8 +222,11 @@ Prompts for template name and content, then saves it to the templates directory.
 
 ;;;###autoload
 (defun aidermacs-open-templates-directory ()
+  "Open the user templates directory in Dired."
+  (interactive)
+  (aidermacs-templates--ensure-directory)
+  (dired aidermacs-user-templates-directory))
 
-;;;###autoload
 (defun aidermacs-templates-diagnose ()
   "Diagnose template system configuration and show what templates are found.
 This is useful for debugging template discovery issues."
@@ -236,9 +239,9 @@ This is useful for debugging template discovery issues."
     (insert (format "User templates directory: %s\n" aidermacs-user-templates-directory))
     (insert (format "  Exists: %s\n" (file-directory-p aidermacs-user-templates-directory)))
     (when (file-directory-p aidermacs-user-templates-directory)
-      (let ((user-templates (aidermacs-templates--list-templates-from-dir 
+      (let ((user-templates (aidermacs-templates--list-templates-from-dir
                              aidermacs-user-templates-directory)))
-        (insert (format "  Found %d user templates: %s\n\n" 
+        (insert (format "  Found %d user templates: %s\n\n"
                         (length user-templates)
                         (mapcar #'car user-templates)))))
 
@@ -248,7 +251,7 @@ This is useful for debugging template discovery issues."
       (insert (format "  Exists: %s\n" (and default-dir (file-directory-p default-dir))))
       (when default-dir
         (let ((default-templates (aidermacs-templates--list-templates-from-dir default-dir)))
-          (insert (format "  Found %d default templates: %s\n\n" 
+          (insert (format "  Found %d default templates: %s\n\n"
                           (length default-templates)
                           (mapcar #'car default-templates))))))
 
@@ -269,11 +272,6 @@ This is useful for debugging template discovery issues."
     (goto-char (point-min))
     (special-mode)
     (display-buffer (current-buffer))))
-
-  "Open the user templates directory in Dired."
-  (interactive)
-  (aidermacs-templates--ensure-directory)
-  (dired aidermacs-user-templates-directory))
 
 (provide 'aidermacs-templates)
 ;;; aidermacs-templates.el ends here
