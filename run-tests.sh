@@ -17,8 +17,17 @@ if [ $? -ne 0 ]; then
 fi
 echo ""
 
-# Test 2: Recording system tests
-echo "Step 2: Running recording system tests..."
+# Test 2: Eval-buffer tests
+echo "Step 2: Running eval-buffer tests..."
+emacs --batch -l test-eval.el
+if [ $? -ne 0 ]; then
+    echo "❌ Eval-buffer tests failed!"
+    exit 1
+fi
+echo ""
+
+# Test 3: Recording system tests
+echo "Step 3: Running recording system tests..."
 emacs --batch -l test-recording-simple.el
 if [ $? -ne 0 ]; then
     echo "❌ Recording system tests failed!"
@@ -26,8 +35,7 @@ if [ $? -ne 0 ]; then
 fi
 echo ""
 
-# Test 3: Template system tests
-echo "Step 3: Running template system tests..."
+echo "Step 4: Running template system tests..."
 emacs --batch -l aidermacs-templates.el -l test-template-system.el
 if [ $? -ne 0 ]; then
     echo "❌ Template system tests failed!"

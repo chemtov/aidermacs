@@ -1,37 +1,76 @@
 # Aidermacs Testing Guide
 
-This document describes the testing infrastructure for aidermacs.
+This document describes the testing infrastructure for aidermacs using Eask and ERT.
 
 ## Test Suite Overview
 
-The aidermacs test suite consists of three main components:
+The aidermacs test suite uses **Eask** for dependency management and test execution, with **ERT** (Emacs Lisp Regression Testing) as the testing framework.
 
-1. **Compilation Tests** (`test-compile.el`) - Must run first
-2. **Recording System Tests** (`test-recording-simple.el`)
-3. **Template System Tests** (`test-template-system.el`)
+### Test Files
+
+All tests are located in the `test/` directory:
+
+1. **aidermacs-compile-test.el** - Byte-compilation tests
+2. **aidermacs-eval-test.el** - Eval-buffer tests (macro expansion, runtime errors)
+3. **aidermacs-recording-test.el** - Recording system tests
+4. **aidermacs-templates-test.el** - Template system tests
+
+## Prerequisites
+
+### Install Eask
+
+Eask is required to run the tests. Install it using npm:
+
+```bash
+npm install -g @emacs-eask/cli
+```
+
+Or download binaries from the [Eask releases page](https://github.com/emacs-eask/cli/releases).
+
+Verify installation:
+
+```bash
+eask --version
+```
 
 ## Running Tests
 
 ### Quick Start
 
-Run all tests in the correct order:
+Run all tests using the provided script:
 
 ```bash
-./run-tests.sh
+./run-eask-tests.sh
+```
+
+This script will:
+1. Install all dependencies automatically
+2. Run all ERT tests in the `test/` directory
+3. Report results
+
+### Manual Test Execution
+
+You can also run tests manually using Eask:
+
+```bash
+# Install dependencies first
+eask install-deps --dev
+
+# Run all tests
+eask test ert test/*.el
+
+# Run specific test file
+eask test ert test/aidermacs-templates-test.el
 ```
 
 ### Individual Test Suites
 
-#### 1. Compilation Tests (Run First!)
+#### 1. Compilation Tests
 
-The compilation tests **must** run before any other tests. They:
-- Compile all elisp files to catch syntax errors
-- Detect undefined functions and variables
-- Verify all dependencies are properly declared
-- Clean up all .elc files to prevent them from being committed
+Tests that compile all elisp files to catch syntax errors:
 
 ```bash
-emacs --batch -l test-compile.el
+eask test ert test/aidermacs-compile-test.el
 ```
 
 **Why run this first?**
@@ -39,12 +78,43 @@ emacs --batch -l test-compile.el
 - Ensures code quality before running functional tests
 - Prevents .elc files from polluting the repository
 
-#### 2. Recording System Tests
+#### 2. Eval-Buffer Tests
+
+Tests that evaluate each file to catch macro expansion and runtime errors:
+
+```bash
+eask test ert test/aidermacs-eval-test.el
+```
+
+**What it catches:**
+- Macro expansion errors (e.g., `transient-define-prefix` issues)
+- Runtime evaluation errors
+- `defcustom` validation errors
+- Autoload issues
+- Feature loading problems
+
+**How it works:**
+- Eask automatically installs dependencies (transient, compat, markdown-mode)
+- Caches packages in `.eask/` sandbox for fast subsequent runs
+- Evaluates each file using `load-file`
+- First run takes ~30-60s (downloads packages), subsequent runs ~5-10s
+
+**Why it's important:**  
+Byte-compilation doesn't catch everything! For example, this compiles fine but fails at eval:
+
+```elisp
+(transient-define-prefix my-menu ()
+  "Menu"
+  [["Section"
+    ("a" "Action" missing-function)]])  ; Error at eval time!
+```
+
+#### 3. Recording System Tests
 
 Tests for the asciicinema recording feature:
 
 ```bash
-emacs --batch -l test-recording-simple.el
+eask test ert test/aidermacs-recording-test.el
 ```
 
 Tests include:
@@ -54,12 +124,12 @@ Tests include:
 - Project name extraction
 - Path validation
 
-#### 3. Template System Tests
+#### 4. Template System Tests
 
 Tests for the template system:
 
 ```bash
-emacs --batch -l aidermacs-templates.el -l test-template-system.el
+eask test ert test/aidermacs-templates-test.el
 ```
 
 Tests include:
@@ -69,9 +139,11 @@ Tests include:
 - Interactive editing
 - Marginalia integration
 
-## Test Files
+## Test Organization
 
-### test-compile.el
+All tests use the ERT (Emacs Lisp Regression Testing) framework and are located in the `test/` directory.
+
+### test/aidermacs-compile-test.el
 
 Compilation test suite that:
 - Compiles files in dependency order
@@ -80,21 +152,30 @@ Compilation test suite that:
 - Tracks and cleans up all .elc files
 - Reports detailed compilation results
 
-**Exit codes:**
-- 0: All files compiled successfully
-- 1: One or more files failed to compile
+### test/aidermacs-eval-test.el
 
-### test-recording-simple.el
+Eval-buffer test suite that:
+- Evaluates each file using `load-file`
+- Catches macro expansion and runtime errors
+- Tests in isolated Eask sandbox
+- Reports detailed evaluation results
 
-Unit tests for recording functions without requiring full aidermacs loading.
+### test/aidermacs-recording-test.el
 
-### test-template-system.el
+Unit tests for recording functions:
+- Asciinema availability checks
+- Filename generation
+- Directory creation
+- Path validation
 
-Comprehensive tests for the template system including:
+### test/aidermacs-templates-test.el
+
+Comprehensive tests for the template system:
 - Basic functionality tests
 - Filesystem operations
 - Metadata parsing
 - Interactive features
+- Placeholder handling
 
 ## Continuous Integration
 
@@ -103,28 +184,28 @@ For CI/CD pipelines, use the test runner script:
 ```bash
 #!/bin/bash
 cd /path/to/aidermacs
-./run-tests.sh
+./run-eask-tests.sh
 ```
 
 The script will:
-1. Run compilation tests first
-2. Exit immediately if compilation fails
-3. Run remaining tests in order
-4. Report overall success/failure
+1. Install dependencies automatically
+2. Run all ERT tests
+3. Report overall success/failure
 
 ## Adding New Tests
 
 ### For New Features
 
 1. Add unit tests to appropriate test file
-2. Update `run-tests.sh` if needed
+2. Update `run-eask-tests.sh` if needed
 3. Document test coverage in this file
 
 ### For New Files
 
-1. Add filename to `test-compile-files` list in `test-compile.el`
-2. Ensure proper dependency order
-3. Add any required stubs for optional dependencies
+1. Add filename to `aidermacs-compile-test-files` list in `test/aidermacs-compile-test.el`
+2. Add filename to `aidermacs-eval-test-files` list in `test/aidermacs-eval-test.el`
+3. Ensure proper dependency order
+4. Add any required stubs for optional dependencies
 
 ## Troubleshooting
 
@@ -143,8 +224,8 @@ The script will:
 **Problem:** .elc files remain after tests
 
 **Solutions:**
-1. Check that `test-compile-cleanup` is being called
-2. Verify `test-compile-elc-files` list is populated correctly
+1. Check that `aidermacs-compile-test-cleanup` is being called
+2. Verify `aidermacs-compile-test-elc-files` list is populated correctly
 3. Manually clean up: `rm *.elc`
 
 ### Tests Pass Locally But Fail in CI
@@ -183,6 +264,7 @@ The script will:
 Current test coverage:
 
 - ✅ Compilation of all elisp files
+- ✅ Eval-buffer testing (macro expansion, runtime errors)
 - ✅ Recording system functionality
 - ✅ Template system functionality
 - ✅ Placeholder extraction and replacement
@@ -191,9 +273,14 @@ Current test coverage:
 - ⚠️  Integration tests (manual only)
 - ⚠️  UI/UX tests (manual only)
 
+## Additional Resources
+
+- [Eask Usage Guide](docs/EASK_USAGE.md) - Detailed Eask documentation
+- [Eask Official Documentation](https://emacs-eask.github.io/)
+- [ERT Manual](https://www.gnu.org/software/emacs/manual/html_mono/ert.html)
+
 ## Future Improvements
 
-- [ ] Add ERT-based tests for better integration
 - [ ] Add coverage reporting
 - [ ] Add performance benchmarks
 - [ ] Add integration tests for full workflows
