@@ -22,6 +22,7 @@
 
 (require 'aidermacs-backend-comint)
 (require 'aidermacs-backend-vterm)
+(require 'aidermacs-backend-eat)
 
 (declare-function aidermacs-run-vterm "aidermacs-backend-vterm")
 (declare-function aidermacs--send-command-vterm "aidermacs-backend-vterm")
@@ -35,11 +36,13 @@
 
 (defcustom aidermacs-backend 'comint
   "Backend to use for the aidermacs process.
-Options are `comint' (the default) or `vterm'.  When set to `vterm',
-aidermacs launches a fully functional vterm buffer instead
-of using a comint process."
+Options are `comint' (the default), `vterm', or `eat'.
+- `comint': Traditional comint-based terminal with syntax highlighting
+- `vterm': Full terminal emulation via libvterm
+- `eat': Modern Emacs terminal emulator with ANSI formatting"
   :type '(choice (const :tag "Comint" comint)
-                 (const :tag "VTerm" vterm)))
+                 (const :tag "VTerm" vterm)
+                 (const :tag "Eat" eat)))
 
 (defvar-local aidermacs--current-callback nil
   "Store the callback function for the current command.")
@@ -67,28 +70,37 @@ Optional RECORDING-FILE, if provided, enables asciinema recording (vterm only)."
     (cond
      ((eq aidermacs-backend 'vterm)
       (aidermacs-run-vterm program args buffer-name recording-file))
+     ((eq aidermacs-backend 'eat)
+      (aidermacs-run-eat program args buffer-name))
      (t
       (aidermacs-run-comint program args buffer-name)))))
 
 (defun aidermacs--is-aidermacs-buffer-p (&optional buffer)
   "Check if BUFFER is any type of aidermacs buffer.
 If BUFFER is nil, check the current buffer.
-Returns non-nil if the buffer has either `aidermacs-comint-mode' or
-`aidermacs-vterm-mode' enabled."
+Returns non-nil if the buffer has either `aidermacs-comint-mode',
+`aidermacs-vterm-mode', or `aidermacs-eat-mode' enabled."
   (let ((buf (or buffer (current-buffer))))
     (with-current-buffer buf
       (or (derived-mode-p 'aidermacs-comint-mode)
-          (bound-and-true-p aidermacs-vterm-mode)))))
+          (bound-and-true-p aidermacs-vterm-mode)
+          (bound-and-true-p aidermacs-eat-mode)))))
 
 (defun aidermacs--send-command-backend (buffer command &optional redirect)
   "Send command to buffer using the appropriate backend.
 BUFFER is the target buffer.  COMMAND is the text to send.
 If REDIRECT is non-nil it redirects the output (hidden) for comint backend."
-  (if (eq aidermacs-backend 'vterm)
-      (aidermacs--send-command-vterm buffer command)
+  (cond
+   ((eq aidermacs-backend 'vterm)
+    (aidermacs--send-command-vterm buffer command))
+   ((eq aidermacs-backend 'eat)
+    (if redirect
+        (aidermacs--send-command-redirect-eat buffer command)
+      (aidermacs--send-command-eat buffer command)))
+   (t
     (if redirect
         (aidermacs--send-command-redirect-comint buffer command)
-      (aidermacs--send-command-comint buffer command))))
+      (aidermacs--send-command-comint buffer command)))))
 
 (provide 'aidermacs-backends)
 

@@ -310,6 +310,23 @@ If you prefer to automatically accept all Architect mode changes without confirm
 
 ### Terminal Backend Selection
 
+
+**Why Choose Eat?**
+
+The `eat` backend offers a superior user experience due to its native Emacs integration. Both `vterm` and `eat` are terminal emulators that process ANSI escape sequences for text styling, but their rendering approaches are fundamentally different:
+
+- **`vterm`**: Uses the external C library `libvterm` to maintain a terminal grid. The Emacs buffer displays a visual representation of this grid. When you copy text, you are capturing it from the grid, which often includes unwanted spacing and formatting artifacts.
+
+- **`eat`**: Being a pure Emacs Lisp terminal emulator, `eat` translates ANSI sequences directly into native Emacs text properties. The buffer contains standard Emacs text styled with face properties. This means copying text yields clean, properly formatted text without any grid-based artifacts.
+
+This core distinction provides several key benefits:
+
+- **Clean Copy/Paste**: Text can be copied and pasted without any cleanup required.
+- **Conversation Navigation**: Precise navigation between AI responses and user prompts using keyboard shortcuts (`C-c C-n`, `C-c C-p`).
+- **Native Emacs Integration**: Deep integration with Emacs features like text properties and overlays.
+
+**Configuration:**
+
 Choose your preferred terminal backend by setting `aidermacs-backend`:
 
 `vterm` offers better terminal compatibility, while `comint` provides a simple, built-in option that remains fully compatible with Aidermacs.
@@ -322,6 +339,7 @@ Choose your preferred terminal backend by setting `aidermacs-backend`:
 Available backends:
 - `comint` (default): Uses Emacs' built-in terminal emulation
 - `vterm`: Leverages vterm for better terminal compatibility
+- `eat`: Pure Emacs Lisp terminal with rich formatting and navigation (recommended for best experience)
 
 ### Emacs theme support
 The vterm backend will use the faces defined by your active Emacs theme to set the colors for aider. It tries to guess some reasonable color values based on your themes. In some cases this will not work perfectly; if text is unreadable for you, you can turn this off as follows:
@@ -387,10 +405,6 @@ When enabled, Aidermacs will will watch all files in your repo and look for any 
 
 Specifically, aider looks for one-liner comments (`# ...`, `// ...` or `-- ...`, regardless of the comment style that language supports) that either start or end with `AI`, `AI!` or `AI?` like these:
 ```
-# Make a snake game. AI!
-# What is the purpose of this method AI?
-
-// Write a protein folding prediction engine. AI!
 ```
 Aidermacs will take note of all the comments that start or end with `AI`. Comments that include `AI!` with an exclamation point or `AI?` with a question mark are special. They trigger aider to take action to collect all the AI comments and use them as your instructions.
 

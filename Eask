@@ -18,12 +18,14 @@
 
 ;; Package archives
 (source "gnu")
+(source "nongnu")
 (source "melpa")
 
 ;; Runtime dependencies
 (depends-on "transient" "0.3.0")
 (depends-on "compat" "30.0.2.0")
 (depends-on "markdown-mode" "2.7")
+(depends-on "eat" "0.9")
 
 ;; Development dependencies
 (development
