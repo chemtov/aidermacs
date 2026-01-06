@@ -176,6 +176,36 @@ When nil, require explicit confirmation before applying changes."
   "When non-nil, `aidermacs-exit' will also kill the Aider buffer."
   :type 'boolean)
 
+(defcustom aidermacs-recording-directory "~/Videos"
+  "Directory where asciicinema recordings will be saved.
+Recordings are saved with the format: <project-name>-<datetime>.cast"
+  :type 'directory)
+
+(defvar-local aidermacs--recording-file nil
+  "Path to the current asciicinema recording file, if recording is active.")
+
+(defvar-local aidermacs--recording-enabled nil
+  "Non-nil if this session was started with recording enabled.")
+
+(defun aidermacs--generate-recording-filename ()
+  "Generate a filename for the asciicinema recording.
+Format: <project-name>-<datetime>.cast
+Returns the full path to the recording file."
+  (let* ((root (aidermacs-project-root))
+         (project-name (file-name-nondirectory (directory-file-name root)))
+         (timestamp (format-time-string "%Y%m%d-%H%M%S"))
+         (filename (format "%s-%s.cast" project-name timestamp))
+         (dir (expand-file-name aidermacs-recording-directory)))
+    ;; Ensure the directory exists
+    (unless (file-directory-p dir)
+      (make-directory dir t))
+    (expand-file-name filename dir)))
+
+(defun aidermacs--asciinema-available-p ()
+  "Check if asciinema is available in the system.
+Returns t if asciinema executable is found, nil otherwise."
+  (executable-find "asciinema"))
+
 (defvar aidermacs--read-string-history nil
   "History list for aidermacs read string inputs.")
 
@@ -253,6 +283,16 @@ This is the file name without path."
                (concat "Open Session " (propertize "(RUNNING)" 'face 'success))
              (concat "Start Session " (propertize "(NOT RUNNING)" 'face 'warning))))
      aidermacs-run)
+    ("A" (lambda ()
+           (let ((buffer-name (aidermacs-get-buffer-name)))
+             (if (and (get-buffer buffer-name)
+                      (with-current-buffer buffer-name
+                        aidermacs--recording-enabled))
+                 (concat "Recording Session " (propertize "(RECORDING)" 'face 'success))
+               (concat "Start with Recording " (propertize "(NOT RECORDING)" 'face 'warning)))))
+     aidermacs-run-with-recording
+     :if (lambda () (and (eq aidermacs-backend 'vterm)
+                         (aidermacs--asciinema-available-p))))
     ("." "Start in Current Dir" aidermacs-run-in-current-dir)
     (":" "Start in Chosen Dir" aidermacs-run-in-directory)
     ("l" "Clear Chat History" aidermacs-clear-chat-history)
@@ -389,6 +429,132 @@ If supplied, SUFFIX is appended to the buffer name within the earmuffs."
   "Return t if the aider buffer is availble and process is currently running"
   (and (get-buffer buffer-name)
        (process-live-p (get-buffer-process (or buffer-name (aidermacs-get-buffer-name))))))
+
+
+;;;###autoload
+(defun aidermacs-run-with-recording ()
+  "Run aidermacs process with asciicinema recording enabled.
+This function wraps the aider session with asciinema recording.
+The recording is saved to `aidermacs-recording-directory' with format:
+<project-name>-<datetime>.cast
+
+Only works with vterm backend. If asciinema is not available, falls back
+to regular aidermacs-run."
+  (interactive)
+  ;; Check if asciinema is available
+  (unless (aidermacs--asciinema-available-p)
+    (user-error "Asciinema is not installed. Please install it first or use regular aidermacs-run"))
+  
+  ;; Check if vterm backend is being used
+  (unless (eq aidermacs-backend 'vterm)
+    (user-error "Recording is only supported with vterm backend. Set `aidermacs-backend' to 'vterm"))
+  
+  ;; Legacy boolean ⇒ new symbol
+  (when (and aidermacs-use-architect-mode
+             (null aidermacs-default-chat-mode))
+    (setq aidermacs-default-chat-mode 'architect)
+    (display-warning
+     'aidermacs
+     "`aidermacs-use-architect-mode' is obsolete – \
+set `aidermacs-default-chat-mode' to 'architect' instead."
+     :warning))
+  ;; Set up necessary hooks when aidermacs is actually run
+  (aidermacs--setup-ediff-cleanup-hooks)
+  (aidermacs--setup-cleanup-hooks)
+  (aidermacs-setup-minor-mode)
+
+  (let* ((buffer-name (aidermacs-get-buffer-name))
+         ;; Generate recording filename
+         (recording-file (aidermacs--generate-recording-filename))
+         ;; Split each string on whitespace for member comparison later
+         (flat-extra-args
+          (cl-mapcan (lambda (s)
+                       (if (stringp s)
+                           (split-string s "[[:space:]]+" t)
+                         (list s)))
+                     aidermacs-extra-args))
+         (has-model-arg (cl-some (lambda (x) (member x flat-extra-args))
+                                 '("--model" "--opus" "--sonnet" "--haiku"
+                                   "--4" "--4o" "--mini" "--4-turbo" "--35turbo"
+                                   "--deepseek" "--o1-mini" "--o1-preview")))
+         (has-config-arg (or (cl-some (lambda (dir)
+                                        (let ((conf (expand-file-name ".aider.conf.yml" dir)))
+                                          (when (file-exists-p conf)
+                                            dir)))
+                                      (list (expand-file-name "~")
+                                            (aidermacs-project-root)
+                                            default-directory))
+                             aidermacs-config-file
+                             (cl-some (lambda (x) (member x flat-extra-args))
+                                      '("--config" "-c"))))
+         ;; Check aider version for auto-accept-architect support
+         (aider-version (aidermacs-aider-version))
+
+         ;; New code: determine startup mode and warnings
+         (startup-mode (or aidermacs-default-chat-mode 'code))
+         (needs-chat-flag (and startup-mode (not (eq startup-mode 'code))))
+         (architect? (eq startup-mode 'architect)))
+    (let* ((backend-args
+            (if has-config-arg
+                ;; Only need to add aidermacs-config-file manually
+                (when aidermacs-config-file
+                  (list "--config" aidermacs-config-file))
+              (append
+               ;; --chat-mode when required (ask/help/architect)
+               (when needs-chat-flag
+                 (list "--chat-mode" (symbol-name startup-mode)))
+
+               ;; extra model flags for architect
+               (when architect?
+                 (list "--model"        (aidermacs-get-architect-model)
+                       "--editor-model" (aidermacs-get-editor-model)))
+
+               ;; default --model when we're still in plain code mode and user
+               ;; didn't supply one
+               (when (and (not needs-chat-flag) (not has-model-arg))
+                 (list "--model" aidermacs-default-model))
+
+               ;; existing flags that follow (no change)
+               (unless aidermacs-auto-commits
+                 '("--no-auto-commits"))
+               ;; Only add --no-auto-accept-architect if:
+               ;; 1. User has disabled auto-accept (aidermacs-auto-accept-architect is nil)
+               ;; 2. Aider version supports this flag (>= 0.77.0)
+               (when (and (not aidermacs-auto-accept-architect)
+                          (version<= "0.77.0" aider-version))
+                 '("--no-auto-accept-architect"))
+               ;; Add watch-files if enabled
+               (when aidermacs-watch-files
+                 '("--watch-files"))
+               ;; Add weak model if specified
+               (when aidermacs-weak-model
+                 (list "--weak-model" aidermacs-weak-model))
+               ;; Aider-CE Only Option
+               (when (let ((prog (gethash (aidermacs--get-cache-key) aidermacs--resolved-programs)))
+                       (and prog (string-match-p "aider-ce" prog)))
+                 '("--linear-output"))
+               (when aidermacs-global-read-only-files
+                 (apply #'append
+                        (mapcar (lambda (file) (list "--read" file))
+                                aidermacs-global-read-only-files)))
+               (when aidermacs-project-read-only-files
+                 (apply #'append
+                        (mapcar (lambda (file) (list "--read"
+                                                     (expand-file-name file (aidermacs-project-root))))
+                                aidermacs-project-read-only-files))))))
+           ;; Take the original aidermacs-extra-args instead of the flat ones
+           (final-args (append backend-args
+                               (when aidermacs-subtree-only
+                                 '("--subtree-only"))
+                               aidermacs-extra-args)))
+      (if (aidermacs--live-p buffer-name)
+          (aidermacs-switch-to-buffer buffer-name)
+        (message "Starting aidermacs with recording to: %s" recording-file)
+        (aidermacs-run-backend (aidermacs-get-program) final-args buffer-name recording-file)
+        (with-current-buffer buffer-name
+          ;; Set initial mode based on startup configuration
+          (setq-local aidermacs--current-mode startup-mode))
+        (aidermacs-switch-to-buffer buffer-name)))))
 
 ;;;###autoload
 (defun aidermacs-run ()
