@@ -1,0 +1,8 @@
+/architect Please implement the following feature: {Feature-Description}
+
+Requirements:
+- {Requirement-1}
+- {Requirement-2}
+- Follow best practices for {Programming-Language}
+- Include appropriate error handling
+- Add comments explaining complex logic
