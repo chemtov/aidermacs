@@ -454,31 +454,33 @@ Returns a list of (start end face) tuples."
             properties)))))
 
 (defun aidermacs-eat--extract-syntax-properties (content mode)
-  "Extract syntax highlighting properties from CONTENT using MODE."
+  "Extract syntax properties from CONTENT using MODE with clean hook isolation."
   (condition-case err
-      (with-temp-buffer
-        ;; Set up the major mode
-        (funcall mode)
-        
-        ;; Insert content
-        (insert content)
-        
-        ;; Apply syntax highlighting
-        (font-lock-ensure)
-        
-        ;; Extract text properties
-        (let ((properties '())
-              (pos (point-min)))
-          (while (< pos (point-max))
-            (let* ((next-change (next-property-change pos nil (point-max)))
-                   (face (get-text-property pos 'face)))
-              (when face
-                (push (list (- pos (point-min)) 
-                           (- next-change (point-min)) 
-                           face) 
-                      properties))
-              (setq pos next-change)))
-          (nreverse properties)))
+      (let ((temp-buffer (generate-new-buffer " *temp*" t)))
+        (with-current-buffer temp-buffer
+          (unwind-protect
+              (progn
+                ;; Use delay-mode-hooks to prevent ALL mode hooks from running
+                ;; This prevents flyspell, ispell, and other minor modes from activating
+                (delay-mode-hooks
+                  (funcall mode)
+                  (insert content)
+                  (font-lock-ensure))
+
+                ;; Extract face properties for syntax highlighting
+                (let ((properties nil)
+                      (pos (point-min)))
+                  (while (< pos (point-max))
+                    (let* ((next-change (next-property-change pos nil (point-max)))
+                           (face (get-text-property pos 'face)))
+                      (when face
+                        (setq properties (cons (list pos next-change face) properties)))
+                      (setq pos next-change)))
+                  (nreverse properties)))
+
+            ;; Always clean up the temporary buffer
+            (when (buffer-name temp-buffer)
+              (kill-buffer temp-buffer)))))
     (error
      (message "Error applying syntax highlighting for mode %s: %s" mode err)
      nil)))
