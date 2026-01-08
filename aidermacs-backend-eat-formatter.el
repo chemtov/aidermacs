@@ -895,6 +895,88 @@ NOTE: This is now used only for reference - actual formatting happens via buffer
     (aidermacs-eat-setup-formatter))
   (aidermacs-eat--filter-output aidermacs-eat--formatter-state output))
 
-(provide 'aidermacs-backend-eat-formatter)
+;;; Debugging and Maintenance Functions
 
+(defvar aidermacs-eat-reset-log nil
+  "Log of reset operations and their context.")
+
+(defun aidermacs-eat-force-osc133-reset-with-logging ()
+  "Reset OSC 133 state with comprehensive logging for RCA."
+  (interactive)
+  (let ((reset-info (list
+                     :timestamp (current-time)
+                     :buffer (buffer-name)
+                     :before-state (list
+                                   :enabled (eat-osc133-content-enabled-p)
+                                   :streaming-active eat-osc133-content--streaming-active
+                                   :hooks-installed eat-osc133-content--hooks-installed
+                                   :prompt-start eat-osc133-content--prompt-start-point
+                                   :command-start eat-osc133-content--command-start-point
+                                   :last-formatted eat-osc133-content--last-formatted-point
+                                   :timer-active (and eat-osc133-content--streaming-timer
+                                                     (not (eq
+eat-osc133-content--streaming-timer 'nil))))
+                     :recent-messages nil)))
+
+    ;; Capture recent messages
+    (with-current-buffer "*Messages*"
+      (save-excursion
+        (goto-char (point-max))
+        (forward-line -20)  ; Get last 20 lines
+        (setf (plist-get reset-info :recent-messages)
+              (buffer-substring-no-properties (point) (point-max)))))
+
+    (message "=== OSC 133 RESET WITH LOGGING ===")
+    (message "Before reset - Streaming: %s, Timer: %s, Last formatted: %s"
+             eat-osc133-content--streaming-active
+             (and eat-osc133-content--streaming-timer "active")
+             eat-osc133-content--last-formatted-point)
+
+    ;; Perform the reset
+    (when (eat-osc133-content-enabled-p)
+      (when eat-osc133-content--streaming-active
+        (eat-osc133-content--stop-streaming))
+      (when eat-osc133-content--command-start-point
+        (eat-osc133-content--handle-command-end 0))
+
+      ;; Reset all state
+      (setq eat-osc133-content--prompt-start-point nil
+            eat-osc133-content--command-start-point nil
+            eat-osc133-content--streaming-active nil))
+
+    ;; Record after state
+    (setf (plist-get reset-info :after-state)
+          (list :enabled (eat-osc133-content-enabled-p)
+                :streaming-active eat-osc133-content--streaming-active
+                :hooks-installed eat-osc133-content--hooks-installed
+                :timer-active (and eat-osc133-content--streaming-timer
+                                  (not (eq eat-osc133-content--streaming-timer 'nil)))))
+
+    ;; Add to log
+    (push reset-info aidermacs-eat-reset-log)
+
+    (message "After reset - Streaming: %s, State reset complete"
+             eat-osc133-content--streaming-active)
+    (message "=== RESET COMPLETE - formatting should resume ===")))
+
+(defun aidermacs-eat-show-reset-log ()
+  "Show the reset log for analysis."
+  (interactive)
+  (if aidermacs-eat-reset-log
+      (with-current-buffer (get-buffer-create "*aidermacs-reset-log*")
+        (erase-buffer)
+        (insert "=== AIDERMACS EAT RESET LOG ===\n\n")
+        (dolist (entry (reverse aidermacs-eat-reset-log))
+          (insert (format "Reset at: %s\n" (format-time-string "%Y-%m-%d %H:%M:%S"
+(plist-get entry :timestamp))))
+          (insert (format "Buffer: %s\n" (plist-get entry :buffer)))
+          (insert (format "Before: %S\n" (plist-get entry :before-state)))
+          (insert (format "After: %S\n" (plist-get entry :after-state)))
+          (insert "Recent messages:\n")
+          (insert (plist-get entry :recent-messages))
+          (insert "\n" (make-string 50 ?-) "\n\n"))
+        (display-buffer (current-buffer)))
+    (message "No reset log entries")))
+
+(provide 'aidermacs-backend-eat-formatter)
 ;;; aidermacs-backend-eat-formatter.el ends here
