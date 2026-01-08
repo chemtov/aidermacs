@@ -175,27 +175,27 @@ Returns 'normal, 'code-block-diff, 'code-block-elisp, etc."
   (catch 'context-found
     (save-excursion
       (goto-char pos)
-      
+
       ;; First check if we're ON a code block marker line
-      (let ((current-line (buffer-substring-no-properties 
-                          (line-beginning-position) 
+      (let ((current-line (buffer-substring-no-properties
+                          (line-beginning-position)
                           (line-end-position))))
         (when (string-match "^```\\(\\w+\\)?$" (string-trim current-line))
           ;; We're ON the marker line - return normal, not code-block
           (throw 'context-found 'normal)))
-      
+
       ;; Now scan backward to find what block we're inside
       (let ((found-ambiguous-fence nil)
             (ambiguous-fence-pos nil))
-        
+
         ;; Scan backward
         (while (> (point) (point-min))
           (forward-line -1)
-          (let* ((line (buffer-substring-no-properties 
-                        (line-beginning-position) 
+          (let* ((line (buffer-substring-no-properties
+                        (line-beginning-position)
                         (line-end-position)))
                  (trimmed (string-trim line)))
-            
+
             (cond
              ;; Definite Start (e.g. ```python, ```diff) - Has content after backticks
              ((string-match "^```\\(\\w+\\)$" trimmed)
@@ -205,22 +205,22 @@ Returns 'normal, 'code-block-diff, 'code-block-elisp, etc."
                   (throw 'context-found 'normal)
                 ;; We found a Start and no closing fence before it. We are INSIDE.
                 (throw 'context-found (list 'code-block (match-string 1 trimmed) (point)))))
-             
+
              ;; Ambiguous/Generic Fence (```) - Empty or just backticks
              ;; Use string-prefix-p to be robust against trailing whitespace
              ((string-prefix-p "```" trimmed)
               (if found-ambiguous-fence
-                  ;; We found "```" then "```". 
+                  ;; We found "```" then "```".
                   ;; The first one closed the block opened by the second. We are OUTSIDE.
                   (throw 'context-found 'normal)
-                
+
                 ;; This is the first fence we've seen scanning backwards.
                 ;; It could be an END (if there is a start further back).
                 ;; Or it could be a START (if we hit BOF).
                 ;; Mark it and keep searching.
                 (setq found-ambiguous-fence t)
                 (setq ambiguous-fence-pos (point)))))))
-        
+
         ;; We reached the start of the buffer
         (if found-ambiguous-fence
             ;; The fence we found had no start before it. So it IS the start.
@@ -240,8 +240,8 @@ Returns (content . line-positions) where line-positions is a list of (start . en
       (while (and continue (not (eobp)))
         (let ((line-start (line-beginning-position))
               (line-end (line-beginning-position 2)) ; Include newline for :extend face
-              (line-content (buffer-substring-no-properties 
-                            (line-beginning-position) 
+              (line-content (buffer-substring-no-properties
+                            (line-beginning-position)
                             (line-end-position))))
           ;; Check for closing fence - any line starting with ``` ends the block
           (if (string-prefix-p "```" (string-trim line-content))
@@ -256,16 +256,16 @@ Returns (content . line-positions) where line-positions is a list of (start . en
   (let* ((block-data (aidermacs-eat--collect-code-block-content block-start block-type))
          (content (car block-data))
          (line-positions (cdr block-data)))
-    
+
     (when (and content line-positions)
       ;; Step 1: Always apply the base code face (background) to ALL lines first
       (dolist (line-pos line-positions)
         (put-text-property (car line-pos) (cdr line-pos) 'face 'aidermacs-eat-markdown-code-face))
-      
+
       ;; Step 2: Apply syntax highlighting on top (merging faces)
       (let ((properties (aidermacs-eat--get-syntax-highlighting content block-type)))
         (when properties
-          (aidermacs-eat--debug-log "Applying multi-line syntax highlighting for %s block (%d lines)" 
+          (aidermacs-eat--debug-log "Applying multi-line syntax highlighting for %s block (%d lines)"
                                    block-type (length line-positions))
           (aidermacs-eat--apply-multi-line-syntax-properties content line-positions properties))))))
 
@@ -274,7 +274,7 @@ Returns (content . line-positions) where line-positions is a list of (start . en
 CONTENT is the full block content, LINE-POSITIONS maps content to buffer positions."
   (let ((content-lines (split-string content "\n"))
         (current-content-pos 0))
-    
+
     (dotimes (line-idx (length line-positions))
       (when (< line-idx (length content-lines))
         (let* ((line-pos (nth line-idx line-positions))
@@ -283,23 +283,23 @@ CONTENT is the full block content, LINE-POSITIONS maps content to buffer positio
                (line-content (nth line-idx content-lines))
                (line-content-start current-content-pos)
                (line-content-end (+ current-content-pos (length line-content))))
-          
+
           ;; Apply properties that fall within this line
           (dolist (prop properties)
             (let ((prop-start (nth 0 prop))
                   (prop-end (nth 1 prop))
                   (face (nth 2 prop)))
-              
+
               ;; Check if property overlaps with current line
               (when (and (< prop-start line-content-end)
                          (> prop-end line-content-start))
                 (let ((buffer-start (+ line-start (max 0 (- prop-start line-content-start))))
-                      (buffer-end (+ line-start (min (length line-content) 
+                      (buffer-end (+ line-start (min (length line-content)
                                                     (- prop-end line-content-start)))))
                   (when (< buffer-start buffer-end)
                     ;; Use add-face-text-property to merge syntax face with base background
                     (add-face-text-property buffer-start buffer-end face))))))
-          
+
           ;; Move to next line in content
           (setq current-content-pos (+ line-content-end 1)))))))
 
@@ -310,28 +310,28 @@ CONTENT is the full block content, LINE-POSITIONS maps content to buffer positio
       (goto-char pos)
       (let ((search-start nil)
             (replace-start nil))
-        
+
         ;; Scan backward to find block markers
         (while (and (> (point) (point-min))
                     (not search-start)
                     (not replace-start))
           (forward-line -1)
-          (let ((line (buffer-substring-no-properties 
-                      (line-beginning-position) 
+          (let ((line (buffer-substring-no-properties
+                      (line-beginning-position)
                       (line-end-position))))
             (cond
              ;; Found SEARCH start
              ((string-match "^<<<<<<< SEARCH$" (string-trim line))
               (setq search-start (point)))
-             
+
              ;; Found diff separator
              ((string-match "^=======$" (string-trim line))
               (setq replace-start (point)))
-             
+
              ;; Found REPLACE end (we're outside)
              ((string-match "^>>>>>>> REPLACE$" (string-trim line))
               (throw 'context-found 'normal)))))
-        
+
         ;; Return context
         (cond
          (search-start 'search-block)
@@ -503,16 +503,16 @@ Returns a list of (start end face) tuples."
     (let ((properties (aidermacs-eat--get-syntax-highlighting content block-type)))
       (if properties
           (progn
-            (aidermacs-eat--debug-log "Applying %d syntax properties for %s" 
+            (aidermacs-eat--debug-log "Applying %d syntax properties for %s"
                                      (length properties) block-type)
             (aidermacs-eat--apply-syntax-properties start content properties))
         ;; Fallback to basic code face
         (put-text-property start end 'face 'aidermacs-eat-markdown-code-face))))
-   
+
    ;; Special handling for diff blocks
    ((string= block-type "diff")
     (aidermacs-eat--format-diff-line start end content))
-   
+
    ;; Fallback for unsupported languages
    (t
     (put-text-property start end 'face 'aidermacs-eat-markdown-code-face))))
@@ -619,7 +619,7 @@ Returns a list of (start end face) tuples."
         ;; Replace **text** with just text
         (setq result (replace-match text nil nil result))
         ;; Apply bold face to the replaced text
-        (put-text-property start (+ start (length text)) 'face 
+        (put-text-property start (+ start (length text)) 'face
                           'aidermacs-eat-markdown-bold-face result)))
     result))
 
@@ -666,60 +666,60 @@ Returns the formatted line with text properties (no ANSI)."
         (aidermacs-eat--debug-log "Detected SEARCH marker: %s" trimmed)
         (aidermacs-eat--transition-state state 'search-block)
         (aidermacs-eat--format-search-block-line-with-faces line))
-       
+
        ;; Tool calls (high priority)
        ((aidermacs-eat--is-tool-call-line-p trimmed)
         (aidermacs-eat--debug-log "Detected tool call: %s" trimmed)
         (aidermacs-eat--format-tool-call-with-faces line))
-       
+
        ;; AI reasoning blocks
        ((aidermacs-eat--is-thinking-marker-p trimmed)
         (aidermacs-eat--debug-log "Detected thinking marker: %s" trimmed)
         (aidermacs-eat--format-thinking-marker-with-faces line))
-       
+
        ((aidermacs-eat--is-answer-marker-p trimmed)
         (aidermacs-eat--debug-log "Detected answer marker: %s" trimmed)
         (aidermacs-eat--format-answer-marker-with-faces line))
-       
+
        ;; Context blocks
        ((aidermacs-eat--is-context-start-p trimmed)
         (aidermacs-eat--format-context-start-with-faces line))
-       
+
        ((aidermacs-eat--is-context-end-p trimmed)
         (aidermacs-eat--format-context-end-with-faces line))
-       
+
        ;; Tool results
        ((aidermacs-eat--is-tool-success-p trimmed)
         (aidermacs-eat--format-tool-success-with-faces line))
-       
+
        ((aidermacs-eat--is-tool-error-p trimmed)
         (aidermacs-eat--format-tool-error-with-faces line))
-       
+
        ((aidermacs-eat--is-tool-warning-p trimmed)
         (aidermacs-eat--format-tool-warning-with-faces line))
-       
+
        ;; Interactive prompts
        ((aidermacs-eat--is-interactive-prompt-p trimmed)
         (aidermacs-eat--debug-log "Detected interactive prompt: %s" trimmed)
         (aidermacs-eat--format-interactive-prompt-with-faces line))
-       
+
        ;; Function calls (before markdown to avoid conflicts)
        ((aidermacs-eat--is-function-call-p line)
         (aidermacs-eat--format-function-call-with-faces line))
-       
+
        ;; Markdown formatting (lower priority, more specific)
        ((and (aidermacs-eat--is-markdown-header-p line)
              (not (aidermacs-eat--is-tool-call-line-p trimmed)))
         (aidermacs-eat--format-markdown-header-with-faces line))
-       
+
        ((and (aidermacs-eat--is-markdown-bold-p line)
              (not (aidermacs-eat--is-tool-call-line-p trimmed))
              (not (aidermacs-eat--is-markdown-header-p line)))
         (aidermacs-eat--format-markdown-bold-with-faces line))
-       
+
        ((aidermacs-eat--is-markdown-code-block-p trimmed)
         (aidermacs-eat--format-markdown-code-block-with-faces line))
-       
+
        ;; Default: no formatting
        (t line)))
 
@@ -762,15 +762,15 @@ This is the main entry point for the formatter."
             (setq marker-type 'ai-response))
            ((aidermacs-eat--is-interactive-prompt-p trimmed)
             (setq marker-type 'user-prompt)))
-          
+
           ;; Add the formatted line to result
           (setq result (concat result formatted "\n"))
-          
+
           ;; Mark the position if needed
           (when marker-type
             (put-text-property result-pos (1+ result-pos) 'aidermacs-marker t result)
             (put-text-property result-pos (1+ result-pos) 'aidermacs-marker-type marker-type result))
-          
+
           ;; Update position for next line
           (setq result-pos (length result)))))
     result))
